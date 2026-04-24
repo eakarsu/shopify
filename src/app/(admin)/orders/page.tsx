@@ -1,8 +1,6 @@
 import { db } from "@/lib/db"
 import { serialize } from "@/lib/utils"
-import { OrdersTable } from "@/components/orders/OrdersTable"
-import { PageHeader } from "@/components/layout/PageHeader"
-import { OrderFilters } from "@/components/orders/OrderFilters"
+import { OrdersPageClient } from "@/components/orders/OrdersPageClient"
 
 interface OrdersPageProps {
   searchParams: { status?: string; financial?: string; fulfillment?: string; search?: string }
@@ -58,16 +56,10 @@ export default async function OrdersPage({ searchParams }: OrdersPageProps) {
   ])
 
   return (
-    <div className="space-y-6">
-      <PageHeader
-        title="Orders"
-        description={`${stats.total} orders in your store`}
-        action={{ label: "Create order", href: "/orders/new" }}
-      />
-
-      <OrderFilters stats={stats} searchParams={searchParams} />
-
-      <OrdersTable orders={serialize(orders)} />
-    </div>
+    <OrdersPageClient
+      orders={serialize(orders)}
+      stats={stats}
+      searchParams={searchParams}
+    />
   )
 }

@@ -1,34 +1,31 @@
 "use client"
 
-import { useState } from "react"
-import { CustomersTable } from "./CustomersTable"
-import { CustomerForm } from "./CustomerForm"
+import { OrdersTable } from "./OrdersTable"
 import { PageHeader } from "@/components/layout/PageHeader"
-import { CustomerFilters } from "./CustomerFilters"
+import { OrderFilters } from "./OrderFilters"
 import { Button } from "@/components/ui/button"
 import { Download, FileText } from "lucide-react"
 import { useToast } from "@/hooks/use-toast"
 
-interface CustomersPageClientProps {
-  customers: any[]
-  stats: { total: number; newThisMonth: number; returning: number }
-  searchParams: { search?: string }
+interface OrdersPageClientProps {
+  orders: any[]
+  stats: { total: number; unfulfilled: number; paid: number; pending: number }
+  searchParams: { status?: string; financial?: string; fulfillment?: string; search?: string }
 }
 
-export function CustomersPageClient({ customers, stats, searchParams }: CustomersPageClientProps) {
-  const [formOpen, setFormOpen] = useState(false)
+export function OrdersPageClient({ orders, stats, searchParams }: OrdersPageClientProps) {
   const { toast } = useToast()
 
   const handleExport = async (type: "csv" | "pdf") => {
     try {
       toast({ title: "Exporting...", description: `Generating ${type.toUpperCase()} export` })
-      const res = await fetch(`/api/export/${type}/customers`)
+      const res = await fetch(`/api/export/${type}/orders`)
       if (!res.ok) throw new Error("Export failed")
       const blob = await res.blob()
       const url = URL.createObjectURL(blob)
       const a = document.createElement("a")
       a.href = url
-      a.download = `customers.${type === "csv" ? "csv" : "html"}`
+      a.download = `orders.${type === "csv" ? "csv" : "html"}`
       document.body.appendChild(a)
       a.click()
       document.body.removeChild(a)
@@ -42,9 +39,9 @@ export function CustomersPageClient({ customers, stats, searchParams }: Customer
   return (
     <div className="space-y-6">
       <PageHeader
-        title="Customers"
-        description={`${stats.total} customers in your store`}
-        action={{ label: "Add customer", onClick: () => setFormOpen(true) }}
+        title="Orders"
+        description={`${stats.total} orders in your store`}
+        action={{ label: "Create order", href: "/orders/new" }}
       >
         <Button variant="outline" size="sm" onClick={() => handleExport("csv")}>
           <Download className="mr-1 h-4 w-4" /> CSV
@@ -54,11 +51,9 @@ export function CustomersPageClient({ customers, stats, searchParams }: Customer
         </Button>
       </PageHeader>
 
-      <CustomerFilters stats={stats} searchParams={searchParams} />
+      <OrderFilters stats={stats} searchParams={searchParams} />
 
-      <CustomersTable customers={customers} />
-
-      <CustomerForm open={formOpen} onOpenChange={setFormOpen} />
+      <OrdersTable orders={orders} />
     </div>
   )
 }

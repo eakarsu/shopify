@@ -31,7 +31,7 @@ export async function GET(request: NextRequest) {
       orderBy: { createdAt: "desc" },
       include: {
         variants: true,
-        collections: { select: { id: true, title: true } }
+        collectionProducts: { include: { collection: { select: { id: true, title: true } } } }
       }
     })
 
@@ -71,8 +71,8 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Title is required" }, { status: 400 })
     }
 
-    // Generate handle
-    const handle = title
+    // Generate slug
+    const slug = title
       .toLowerCase()
       .replace(/[^a-z0-9]+/g, "-")
       .replace(/^-|-$/g, "")
@@ -80,7 +80,7 @@ export async function POST(request: NextRequest) {
     const product = await prisma.product.create({
       data: {
         title,
-        handle,
+        slug,
         description,
         price: price || 0,
         compareAtPrice,
@@ -89,20 +89,18 @@ export async function POST(request: NextRequest) {
         tags: tags || [],
         status: status || "DRAFT",
         variants: variants ? {
-          create: variants.map((v: any, index: number) => ({
+          create: variants.map((v: any) => ({
             title: v.title || "Default",
             sku: v.sku,
             price: v.price || price || 0,
             compareAtPrice: v.compareAtPrice,
             inventoryQuantity: v.inventoryQuantity || 0,
-            position: index + 1
           }))
         } : {
           create: {
             title: "Default",
             price: price || 0,
             inventoryQuantity: 0,
-            position: 1
           }
         }
       },

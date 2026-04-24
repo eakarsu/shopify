@@ -14,6 +14,7 @@ import {
   FolderOpen,
   Settings,
   Store,
+  Download,
 } from "lucide-react"
 
 const navigation = [
@@ -25,6 +26,7 @@ const navigation = [
   { name: "Analytics", href: "/analytics", icon: BarChart3 },
   { name: "Discounts", href: "/discounts", icon: Tag },
   { name: "Collections", href: "/collections", icon: FolderOpen },
+  { name: "Export", href: "/export", icon: Download },
   { name: "Settings", href: "/settings", icon: Settings },
 ]
 
