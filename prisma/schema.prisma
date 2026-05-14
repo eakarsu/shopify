@@ -960,3 +960,57 @@ model DailyAnalytics {
 
   @@index([date])
 }
+
+// ============================================
+// AI RESULTS + DESCRIPTION REVISIONS
+// (Audit fixes: cost telemetry, no-overwrite revision history)
+// ============================================
+
+model AIResult {
+  id               String   @id @default(cuid())
+  userId           String?
+  feature          String   // "generate_description", "search_intent", "abandoned_cart_email", etc.
+  productId        String?
+  model            String
+  promptHash       String?
+  promptTokens     Int?
+  completionTokens Int?
+  latencyMs        Int?
+  cacheHit         Boolean  @default(false)
+  ai_results       Json     @default("{}") // structured parsed output (parseAIJson)
+  rawResponse      String?  @db.Text
+  error            String?  @db.Text
+  createdAt        DateTime @default(now())
+
+  @@index([userId])
+  @@index([feature])
+  @@index([productId])
+  @@index([createdAt])
+  @@index([userId, feature])
+}
+
+model ProductDescriptionRevision {
+  id               String   @id @default(cuid())
+  productId        String
+  source           String   // "ai" | "human" | "import"
+  tone             String?
+  audience         String?
+  shortDescription String?  @db.Text
+  mediumDescription String? @db.Text
+  fullDescription  String?  @db.Text
+  seoDescription   String?  @db.Text
+  bulletPoints     Json?
+  suggestedTags    Json?
+  modelUsed        String?
+  authorId         String?
+  appliedToProduct Boolean  @default(false)
+  // Lightweight A/B harness counters (proposal #5)
+  impressions      Int      @default(0)
+  conversions      Int      @default(0)
+  createdAt        DateTime @default(now())
+
+  @@index([productId])
+  @@index([productId, createdAt])
+  @@index([appliedToProduct])
+}
+

@@ -3,6 +3,7 @@ import { stripe } from "@/lib/stripe"
 import { prisma } from "@/lib/prisma"
 import { headers } from "next/headers"
 import Stripe from "stripe"
+import { fireWebhook } from "@/lib/actions/webhooks"
 
 const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET || ""
 
@@ -82,30 +83,5 @@ export async function POST(request: NextRequest) {
   } catch (error: any) {
     console.error("Webhook error:", error)
     return NextResponse.json({ error: error.message }, { status: 500 })
-  }
-}
-
-async function fireWebhook(event: string, data: any) {
-  const webhooks = await prisma.webhook.findMany({
-    where: {
-      isActive: true,
-      events: { has: event }
-    }
-  })
-
-  for (const webhook of webhooks) {
-    try {
-      await fetch(webhook.url, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "X-Webhook-Secret": webhook.secret || "",
-          "X-Webhook-Event": event
-        },
-        body: JSON.stringify({ event, data, timestamp: new Date().toISOString() })
-      })
-    } catch (error) {
-      console.error(`Failed to send webhook to ${webhook.url}:`, error)
-    }
   }
 }

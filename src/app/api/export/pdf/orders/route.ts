@@ -2,6 +2,107 @@ import { NextRequest, NextResponse } from "next/server"
 import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth"
 import { prisma } from "@/lib/prisma"
+import PDFDocument from "pdfkit"
+
+function buildOrdersPDF(orders: any[]): Promise<Buffer> {
+  return new Promise((resolve, reject) => {
+    const doc = new PDFDocument({ margin: 40, size: "A4" })
+    const chunks: Buffer[] = []
+
+    doc.on("data", (chunk: Buffer) => chunks.push(chunk))
+    doc.on("end", () => resolve(Buffer.concat(chunks)))
+    doc.on("error", reject)
+
+    const totalRevenue = orders.reduce((sum, o) => sum + Number(o.totalPrice), 0)
+    const dateStr = new Date().toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" })
+
+    // Header
+    doc.fontSize(22).font("Helvetica-Bold").text("Orders Report", { align: "left" })
+    doc.fontSize(10).font("Helvetica").fillColor("#666666")
+      .text(`Generated on ${dateStr} — ${orders.length} orders`, { align: "left" })
+    doc.moveDown(0.5)
+
+    // Summary cards
+    doc.fillColor("#000000").fontSize(10).font("Helvetica-Bold")
+    const summaryY = doc.y
+    const cardW = (doc.page.width - 80) / 3
+    const cardData = [
+      { label: "Total Orders", value: String(orders.length) },
+      { label: "Total Revenue", value: `$${totalRevenue.toFixed(2)}` },
+      { label: "Avg Order Value", value: `$${orders.length ? (totalRevenue / orders.length).toFixed(2) : "0.00"}` }
+    ]
+
+    cardData.forEach((card, i) => {
+      const x = 40 + i * (cardW + 10)
+      doc.rect(x, summaryY, cardW, 50).fillAndStroke("#f9fafb", "#e5e7eb")
+      doc.fillColor("#6b7280").fontSize(8).font("Helvetica")
+        .text(card.label.toUpperCase(), x + 10, summaryY + 8, { width: cardW - 20 })
+      doc.fillColor("#111827").fontSize(14).font("Helvetica-Bold")
+        .text(card.value, x + 10, summaryY + 22, { width: cardW - 20 })
+    })
+
+    doc.y = summaryY + 65
+    doc.moveDown(0.5)
+
+    // Table header
+    const tableTop = doc.y
+    const cols = [
+      { label: "Order #", x: 40, w: 60 },
+      { label: "Date", x: 105, w: 70 },
+      { label: "Customer", x: 180, w: 110 },
+      { label: "Payment", x: 295, w: 80 },
+      { label: "Fulfillment", x: 380, w: 80 },
+      { label: "Total", x: 465, w: 70 }
+    ]
+
+    doc.rect(40, tableTop, doc.page.width - 80, 20).fill("#f5f5f5")
+    doc.fillColor("#374151").fontSize(8).font("Helvetica-Bold")
+    cols.forEach(col => {
+      doc.text(col.label, col.x, tableTop + 6, { width: col.w })
+    })
+
+    let rowY = tableTop + 22
+    doc.fillColor("#000000").fontSize(8).font("Helvetica")
+
+    orders.forEach((order, idx) => {
+      if (rowY > doc.page.height - 80) {
+        doc.addPage()
+        rowY = 40
+      }
+
+      if (idx % 2 === 0) {
+        doc.rect(40, rowY - 2, doc.page.width - 80, 16).fill("#fafafa")
+      }
+
+      doc.fillColor("#111827")
+      const customerName = order.customer
+        ? `${order.customer.firstName} ${order.customer.lastName}`
+        : order.email || ""
+
+      doc.text(`#${order.orderNumber}`, cols[0].x, rowY, { width: cols[0].w })
+      doc.text(new Date(order.createdAt).toLocaleDateString(), cols[1].x, rowY, { width: cols[1].w })
+      doc.text(customerName.slice(0, 20), cols[2].x, rowY, { width: cols[2].w })
+      doc.text(order.financialStatus, cols[3].x, rowY, { width: cols[3].w })
+      doc.text(order.fulfillmentStatus, cols[4].x, rowY, { width: cols[4].w })
+      doc.font("Helvetica-Bold").text(`$${Number(order.totalPrice).toFixed(2)}`, cols[5].x, rowY, { width: cols[5].w })
+      doc.font("Helvetica")
+
+      // Row separator
+      doc.moveTo(40, rowY + 14).lineTo(doc.page.width - 40, rowY + 14).stroke("#eeeeee")
+      rowY += 16
+    })
+
+    // Footer
+    doc.moveDown(2)
+    doc.fontSize(9).fillColor("#999999")
+      .text("ShopifyClone — Orders Report", 40, doc.page.height - 50, {
+        width: doc.page.width - 80,
+        align: "center"
+      })
+
+    doc.end()
+  })
+}
 
 export async function GET(request: NextRequest) {
   try {
@@ -15,74 +116,13 @@ export async function GET(request: NextRequest) {
       orderBy: { createdAt: "desc" }
     })
 
-    const totalRevenue = orders.reduce((sum, o) => sum + Number(o.totalPrice), 0)
+    const pdfBuffer = await buildOrdersPDF(orders)
 
-    const html = `
-      <!DOCTYPE html>
-      <html>
-      <head>
-        <title>Orders Report</title>
-        <style>
-          body { font-family: Arial, sans-serif; padding: 40px; color: #333; }
-          h1 { font-size: 24px; margin-bottom: 5px; }
-          .subtitle { color: #666; margin-bottom: 20px; }
-          .summary { display: flex; gap: 20px; margin-bottom: 30px; }
-          .summary-card { background: #f9fafb; border: 1px solid #e5e7eb; border-radius: 8px; padding: 15px; flex: 1; }
-          .summary-card h3 { font-size: 12px; color: #6b7280; margin: 0 0 5px 0; text-transform: uppercase; }
-          .summary-card p { font-size: 20px; font-weight: 700; margin: 0; }
-          table { width: 100%; border-collapse: collapse; font-size: 12px; }
-          th { background: #f5f5f5; text-align: left; padding: 10px 8px; border-bottom: 2px solid #ddd; font-weight: 600; }
-          td { padding: 8px; border-bottom: 1px solid #eee; }
-          .status { padding: 2px 8px; border-radius: 4px; font-size: 11px; font-weight: 500; }
-          .paid { background: #dcfce7; color: #166534; }
-          .pending { background: #fef3c7; color: #92400e; }
-          .refunded { background: #f3f4f6; color: #374151; }
-          .footer { margin-top: 30px; font-size: 11px; color: #999; border-top: 1px solid #eee; padding-top: 10px; }
-        </style>
-      </head>
-      <body>
-        <h1>Orders Report</h1>
-        <p class="subtitle">Generated on ${new Date().toLocaleDateString()} - ${orders.length} orders</p>
-        <div class="summary">
-          <div class="summary-card"><h3>Total Orders</h3><p>${orders.length}</p></div>
-          <div class="summary-card"><h3>Total Revenue</h3><p>$${totalRevenue.toFixed(2)}</p></div>
-          <div class="summary-card"><h3>Avg Order Value</h3><p>$${orders.length ? (totalRevenue / orders.length).toFixed(2) : "0.00"}</p></div>
-        </div>
-        <table>
-          <thead>
-            <tr>
-              <th>Order #</th>
-              <th>Date</th>
-              <th>Customer</th>
-              <th>Payment</th>
-              <th>Fulfillment</th>
-              <th>Items</th>
-              <th>Total</th>
-            </tr>
-          </thead>
-          <tbody>
-            ${orders.map(o => `
-              <tr>
-                <td><strong>#${o.orderNumber}</strong></td>
-                <td>${new Date(o.createdAt).toLocaleDateString()}</td>
-                <td>${o.customer ? `${o.customer.firstName} ${o.customer.lastName}` : o.email}</td>
-                <td><span class="status ${o.financialStatus.toLowerCase()}">${o.financialStatus}</span></td>
-                <td>${o.fulfillmentStatus}</td>
-                <td>${o.items.reduce((s, i) => s + i.quantity, 0)}</td>
-                <td><strong>$${Number(o.totalPrice).toFixed(2)}</strong></td>
-              </tr>
-            `).join("")}
-          </tbody>
-        </table>
-        <div class="footer">ShopifyClone - Orders Report</div>
-      </body>
-      </html>
-    `
-
-    return new NextResponse(html, {
+    return new NextResponse(new Uint8Array(pdfBuffer), {
       headers: {
-        "Content-Type": "text/html",
-        "Content-Disposition": `attachment; filename="orders-report-${new Date().toISOString().split("T")[0]}.html"`
+        "Content-Type": "application/pdf",
+        "Content-Disposition": `attachment; filename="orders-report-${new Date().toISOString().split("T")[0]}.pdf"`,
+        "Content-Length": String(pdfBuffer.length)
       }
     })
   } catch (error) {

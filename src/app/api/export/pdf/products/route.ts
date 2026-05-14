@@ -2,6 +2,82 @@ import { NextRequest, NextResponse } from "next/server"
 import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth"
 import { prisma } from "@/lib/prisma"
+import PDFDocument from "pdfkit"
+
+function buildProductsPDF(products: any[]): Promise<Buffer> {
+  return new Promise((resolve, reject) => {
+    const doc = new PDFDocument({ margin: 40, size: "A4" })
+    const chunks: Buffer[] = []
+
+    doc.on("data", (chunk: Buffer) => chunks.push(chunk))
+    doc.on("end", () => resolve(Buffer.concat(chunks)))
+    doc.on("error", reject)
+
+    const dateStr = new Date().toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" })
+
+    // Header
+    doc.fontSize(22).font("Helvetica-Bold").text("Products Report", { align: "left" })
+    doc.fontSize(10).font("Helvetica").fillColor("#666666")
+      .text(`Generated on ${dateStr} — ${products.length} products`, { align: "left" })
+    doc.moveDown(1)
+
+    // Table header
+    const tableTop = doc.y
+    const cols = [
+      { label: "Product", x: 40, w: 170 },
+      { label: "Status", x: 215, w: 70 },
+      { label: "Price", x: 290, w: 70 },
+      { label: "Vendor", x: 365, w: 80 },
+      { label: "Type", x: 450, w: 70 },
+      { label: "Inventory", x: 525, w: 55 }
+    ]
+
+    doc.rect(40, tableTop, doc.page.width - 80, 20).fill("#f5f5f5")
+    doc.fillColor("#374151").fontSize(8).font("Helvetica-Bold")
+    cols.forEach(col => {
+      doc.text(col.label, col.x, tableTop + 6, { width: col.w })
+    })
+
+    let rowY = tableTop + 22
+    doc.fillColor("#000000").fontSize(8).font("Helvetica")
+
+    products.forEach((product, idx) => {
+      if (rowY > doc.page.height - 80) {
+        doc.addPage()
+        rowY = 40
+      }
+
+      if (idx % 2 === 0) {
+        doc.rect(40, rowY - 2, doc.page.width - 80, 16).fill("#fafafa")
+      }
+
+      const totalInventory = product.variants.reduce(
+        (sum: number, v: any) => sum + v.inventoryQuantity, 0
+      )
+
+      doc.fillColor("#111827")
+      doc.font("Helvetica-Bold").text(product.title.slice(0, 28), cols[0].x, rowY, { width: cols[0].w })
+      doc.font("Helvetica")
+      doc.text(product.status, cols[1].x, rowY, { width: cols[1].w })
+      doc.text(`$${Number(product.price).toFixed(2)}`, cols[2].x, rowY, { width: cols[2].w })
+      doc.text((product.vendor || "-").slice(0, 14), cols[3].x, rowY, { width: cols[3].w })
+      doc.text((product.productType || "-").slice(0, 12), cols[4].x, rowY, { width: cols[4].w })
+      doc.text(String(totalInventory), cols[5].x, rowY, { width: cols[5].w })
+
+      doc.moveTo(40, rowY + 14).lineTo(doc.page.width - 40, rowY + 14).stroke("#eeeeee")
+      rowY += 16
+    })
+
+    // Footer
+    doc.fontSize(9).fillColor("#999999")
+      .text("ShopifyClone — Products Report", 40, doc.page.height - 50, {
+        width: doc.page.width - 80,
+        align: "center"
+      })
+
+    doc.end()
+  })
+}
 
 export async function GET(request: NextRequest) {
   try {
@@ -15,62 +91,13 @@ export async function GET(request: NextRequest) {
       orderBy: { createdAt: "desc" }
     })
 
-    const html = `
-      <!DOCTYPE html>
-      <html>
-      <head>
-        <title>Products Report</title>
-        <style>
-          body { font-family: Arial, sans-serif; padding: 40px; color: #333; }
-          h1 { font-size: 24px; margin-bottom: 5px; }
-          .subtitle { color: #666; margin-bottom: 30px; }
-          table { width: 100%; border-collapse: collapse; font-size: 12px; }
-          th { background: #f5f5f5; text-align: left; padding: 10px 8px; border-bottom: 2px solid #ddd; font-weight: 600; }
-          td { padding: 8px; border-bottom: 1px solid #eee; }
-          tr:hover { background: #fafafa; }
-          .status { padding: 2px 8px; border-radius: 4px; font-size: 11px; font-weight: 500; }
-          .status-active { background: #dcfce7; color: #166534; }
-          .status-draft { background: #f3f4f6; color: #374151; }
-          .status-archived { background: #fef3c7; color: #92400e; }
-          .footer { margin-top: 30px; font-size: 11px; color: #999; border-top: 1px solid #eee; padding-top: 10px; }
-        </style>
-      </head>
-      <body>
-        <h1>Products Report</h1>
-        <p class="subtitle">Generated on ${new Date().toLocaleDateString()} - ${products.length} products</p>
-        <table>
-          <thead>
-            <tr>
-              <th>Product</th>
-              <th>Status</th>
-              <th>Price</th>
-              <th>Vendor</th>
-              <th>Type</th>
-              <th>Inventory</th>
-            </tr>
-          </thead>
-          <tbody>
-            ${products.map(p => `
-              <tr>
-                <td><strong>${p.title}</strong></td>
-                <td><span class="status status-${p.status.toLowerCase()}">${p.status}</span></td>
-                <td>$${Number(p.price).toFixed(2)}</td>
-                <td>${p.vendor || "-"}</td>
-                <td>${p.productType || "-"}</td>
-                <td>${p.variants.reduce((s, v) => s + v.inventoryQuantity, 0)}</td>
-              </tr>
-            `).join("")}
-          </tbody>
-        </table>
-        <div class="footer">ShopifyClone - Products Report</div>
-      </body>
-      </html>
-    `
+    const pdfBuffer = await buildProductsPDF(products)
 
-    return new NextResponse(html, {
+    return new NextResponse(new Uint8Array(pdfBuffer), {
       headers: {
-        "Content-Type": "text/html",
-        "Content-Disposition": `attachment; filename="products-report-${new Date().toISOString().split("T")[0]}.html"`
+        "Content-Type": "application/pdf",
+        "Content-Disposition": `attachment; filename="products-report-${new Date().toISOString().split("T")[0]}.pdf"`,
+        "Content-Length": String(pdfBuffer.length)
       }
     })
   } catch (error) {

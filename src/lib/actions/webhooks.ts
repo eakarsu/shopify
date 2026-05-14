@@ -198,62 +198,70 @@ export async function fireWebhook(event: string, data: any) {
   const results = []
 
   for (const webhook of webhooks) {
-    try {
-      const startTime = Date.now()
-      const response = await fetch(webhook.url, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "X-Webhook-Secret": webhook.secret || "",
-          "X-Webhook-Event": event,
-          "X-Webhook-Signature": generateSignature(payload, webhook.secret || "")
-        },
-        body: JSON.stringify(payload)
-      })
-      const duration = Date.now() - startTime
+    let lastError: string = ""
+    let lastStatus: number = 0
+    let lastResponse: string = ""
+    let success = false
+    const startTime = Date.now()
 
-      // Log the result
-      await prisma.webhookLog.create({
-        data: {
-          webhookId: webhook.id,
-          event,
-          payload,
-          statusCode: response.status,
-          response: await response.text().catch(() => ""),
-          duration,
-          success: response.ok
-        }
-      })
+    // Retry up to 3 times with exponential backoff
+    for (let attempt = 0; attempt < 3; attempt++) {
+      if (attempt > 0) {
+        // Exponential backoff: 1s, 2s
+        await new Promise(resolve => setTimeout(resolve, 1000 * attempt))
+      }
 
-      await prisma.webhook.update({
-        where: { id: webhook.id },
-        data: {
-          lastFiredAt: new Date(),
-          failCount: response.ok ? 0 : webhook.failCount + 1
-        }
-      })
+      try {
+        const signature = generateSignature(payload, webhook.secret || "")
+        const response = await fetch(webhook.url, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "X-Webhook-Secret": webhook.secret || "",
+            "X-Webhook-Event": event,
+            "X-Webhook-Signature": signature,
+            "X-Webhook-Attempt": String(attempt + 1)
+          },
+          body: JSON.stringify(payload),
+          signal: AbortSignal.timeout(10000) // 10s timeout per attempt
+        })
 
-      results.push({ webhookId: webhook.id, success: response.ok })
-    } catch (error: any) {
-      await prisma.webhookLog.create({
-        data: {
-          webhookId: webhook.id,
-          event,
-          payload,
-          statusCode: 0,
-          response: error.message,
-          duration: 0,
-          success: false
-        }
-      })
+        lastStatus = response.status
+        lastResponse = await response.text().catch(() => "")
+        success = response.ok
 
-      await prisma.webhook.update({
-        where: { id: webhook.id },
-        data: { failCount: webhook.failCount + 1 }
-      })
-
-      results.push({ webhookId: webhook.id, success: false, error: error.message })
+        if (success) break // Stop retrying on success
+      } catch (error: any) {
+        lastError = error.message
+        lastStatus = 0
+        lastResponse = error.message
+      }
     }
+
+    const duration = Date.now() - startTime
+
+    // Log the final result
+    await prisma.webhookLog.create({
+      data: {
+        webhookId: webhook.id,
+        event,
+        payload,
+        statusCode: lastStatus,
+        response: lastResponse || lastError,
+        duration,
+        success
+      }
+    })
+
+    await prisma.webhook.update({
+      where: { id: webhook.id },
+      data: {
+        lastFiredAt: new Date(),
+        failCount: success ? 0 : webhook.failCount + 1
+      }
+    })
+
+    results.push({ webhookId: webhook.id, success, ...(lastError && { error: lastError }) })
   }
 
   return results
