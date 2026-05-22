@@ -24,6 +24,7 @@ const navigation = [
   { name: "Customers", href: "/customers", icon: Users },
   { name: "Inventory", href: "/inventory", icon: Warehouse },
   { name: "Analytics", href: "/analytics", icon: BarChart3 },
+  { name: "Margin Guard", href: "/merchandising-margin", icon: BarChart3 },
   { name: "Discounts", href: "/discounts", icon: Tag },
   { name: "Collections", href: "/collections", icon: FolderOpen },
   { name: "Export", href: "/export", icon: Download },
