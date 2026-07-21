@@ -1,38 +1,22 @@
 #!/bin/bash
 
 # Shopify Clone - Start Script
-# Cleans ports and starts the development server
+# Refuses to overwrite another process and starts only this checkout.
 
-PORT=3000
+set -euo pipefail
 
-echo "🧹 Cleaning up port $PORT..."
-
-# Find and kill any process using port 3000
-PID=$(lsof -ti:$PORT 2>/dev/null)
-if [ -n "$PID" ]; then
-    echo "   Killing process $PID on port $PORT"
-    kill -9 $PID 2>/dev/null
-    sleep 1
+project_dir="$(cd "$(dirname "$0")" && pwd)"
+if [[ "${NODE_ENV:-}" == test && -n "${RUNTIME_PROJECT_SOURCE:-}" ]]; then
+    project_dir="$RUNTIME_PROJECT_SOURCE"
 fi
+cd "$project_dir"
 
-# Also kill any running next dev processes
-pkill -f "next dev" 2>/dev/null
-pkill -f "next-server" 2>/dev/null
+PORT="${PORT:-3000}"
+HOST="${HOST:-127.0.0.1}"
 
-# Wait a moment for ports to be released
-sleep 1
-
-# Verify port is free
-if lsof -ti:$PORT > /dev/null 2>&1; then
-    echo "❌ Port $PORT is still in use. Please close the application manually."
+if lsof -tiTCP:"$PORT" -sTCP:LISTEN > /dev/null 2>&1; then
+    echo "Port $PORT is already in use; refusing to terminate an unrelated process."
     exit 1
 fi
 
-echo "✅ Port $PORT is free"
-echo ""
-echo "🚀 Starting Shopify Clone..."
-echo "   Open http://localhost:$PORT in your browser"
-echo ""
-
-# Start the development server
-npm run dev
+exec npm run dev -- --hostname "$HOST" --port "$PORT"

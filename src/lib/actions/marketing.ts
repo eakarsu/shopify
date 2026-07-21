@@ -24,7 +24,7 @@ export async function createCampaign(data: {
       content,
       type,
       status: scheduledFor ? "SCHEDULED" : "DRAFT",
-      scheduledFor,
+      scheduledAt: scheduledFor,
       recipientCount,
       openCount: 0,
       clickCount: 0
@@ -59,7 +59,10 @@ export async function updateCampaign(
   const updated = await prisma.marketingCampaign.update({
     where: { id: campaignId },
     data: {
-      ...data,
+      ...(data.name !== undefined && { name: data.name }),
+      ...(data.subject !== undefined && { subject: data.subject }),
+      ...(data.content !== undefined && { content: data.content }),
+      scheduledAt: data.scheduledFor,
       status: data.scheduledFor ? "SCHEDULED" : "DRAFT"
     }
   })

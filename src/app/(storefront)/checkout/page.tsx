@@ -6,7 +6,7 @@ import { authOptions } from "@/lib/auth"
 import { CheckoutForm } from "@/components/storefront/CheckoutForm"
 
 async function getCartReadOnly() {
-  const cookieStore = cookies()
+  const cookieStore = await cookies()
   const cartId = cookieStore.get("cartId")?.value
 
   if (!cartId) return null
@@ -67,12 +67,17 @@ export default async function CheckoutPage() {
     redirect("/cart")
   }
 
+  const trackedItems = cart.items.filter(
+    (item): item is typeof item & { variant: NonNullable<typeof item.variant> } => Boolean(item.variant),
+  )
+  if (trackedItems.length !== cart.items.length) redirect("/cart")
+
   const discount = await getDiscount(cart.discountCode)
 
   const serializedCart = {
     id: cart.id,
     discountCode: cart.discountCode,
-    items: cart.items.map(item => ({
+    items: trackedItems.map(item => ({
       id: item.id,
       quantity: item.quantity,
       variant: {
@@ -117,6 +122,7 @@ export default async function CheckoutPage() {
     code: discount.code,
     type: discount.type,
     value: Number(discount.value),
+    maxAmount: discount.maxAmount ? Number(discount.maxAmount) : null,
     minPurchaseAmount: discount.minPurchaseAmount ? Number(discount.minPurchaseAmount) : null
   } : null
 

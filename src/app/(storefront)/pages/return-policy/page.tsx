@@ -4,7 +4,7 @@ export default function ReturnPolicyPage() {
       <h1 className="text-4xl font-bold mb-8">Returns & Refunds</h1>
       <div className="prose max-w-none">
         <h2 className="text-2xl font-semibold mt-8 mb-4">30-Day Return Policy</h2>
-        <p className="text-muted-foreground mb-4">We want you to be completely satisfied with your purchase. If you're not happy, you can return most items within 30 days of delivery for a full refund.</p>
+        <p className="text-muted-foreground mb-4">We want you to be completely satisfied with your purchase. If you&apos;re not happy, you can return most items within 30 days of delivery for a full refund.</p>
         
         <h2 className="text-2xl font-semibold mt-8 mb-4">Return Conditions</h2>
         <ul className="list-disc pl-6 text-muted-foreground mb-4">
@@ -23,7 +23,7 @@ export default function ReturnPolicyPage() {
         </ol>
         
         <h2 className="text-2xl font-semibold mt-8 mb-4">Refund Processing</h2>
-        <p className="text-muted-foreground">Refunds are processed within 5-7 business days after we receive your return. You'll receive an email confirmation once processed.</p>
+        <p className="text-muted-foreground">Refunds are processed within 5-7 business days after we receive your return. You&apos;ll receive an email confirmation once processed.</p>
       </div>
     </div>
   )

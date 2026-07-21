@@ -1,10 +1,10 @@
 import Stripe from "stripe"
 
 // Server-side Stripe instance
-export const stripe = new Stripe(process.env.STRIPE_SECRET_KEY || "", {
-  apiVersion: "2023-10-16",
-  typescript: true,
-})
+function stripeClient() {
+  if (!process.env.STRIPE_SECRET_KEY) throw new Error("STRIPE_SECRET_KEY is required")
+  return new Stripe(process.env.STRIPE_SECRET_KEY)
+}
 
 // Client-side publishable key
 export const getStripePublishableKey = () => {
@@ -13,7 +13,7 @@ export const getStripePublishableKey = () => {
 
 // Create a payment intent for checkout
 export async function createPaymentIntent(amount: number, currency: string = "usd", metadata?: Record<string, string>) {
-  const paymentIntent = await stripe.paymentIntents.create({
+  const paymentIntent = await stripeClient().paymentIntents.create({
     amount: Math.round(amount * 100), // Convert to cents
     currency,
     automatic_payment_methods: {
@@ -27,13 +27,13 @@ export async function createPaymentIntent(amount: number, currency: string = "us
 
 // Confirm payment intent
 export async function confirmPaymentIntent(paymentIntentId: string) {
-  const paymentIntent = await stripe.paymentIntents.retrieve(paymentIntentId)
+  const paymentIntent = await stripeClient().paymentIntents.retrieve(paymentIntentId)
   return paymentIntent
 }
 
 // Create a refund
 export async function createRefund(paymentIntentId: string, amount?: number) {
-  const refund = await stripe.refunds.create({
+  const refund = await stripeClient().refunds.create({
     payment_intent: paymentIntentId,
     amount: amount ? Math.round(amount * 100) : undefined,
   })
@@ -42,6 +42,6 @@ export async function createRefund(paymentIntentId: string, amount?: number) {
 
 // Get payment intent status
 export async function getPaymentIntentStatus(paymentIntentId: string) {
-  const paymentIntent = await stripe.paymentIntents.retrieve(paymentIntentId)
+  const paymentIntent = await stripeClient().paymentIntents.retrieve(paymentIntentId)
   return paymentIntent.status
 }

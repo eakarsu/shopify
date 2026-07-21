@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button"
 import { ArrowLeft, Calendar, User, Clock } from "lucide-react"
 
 interface BlogPostPageProps {
-  params: { slug: string }
+  params: Promise<{ slug: string }>
 }
 
 async function getBlogPost(slug: string) {
@@ -18,7 +18,7 @@ async function getBlogPost(slug: string) {
 async function getRelatedPosts(currentId: string) {
   return prisma.blogPost.findMany({
     where: {
-      isPublished: true,
+      status: "PUBLISHED",
       id: { not: currentId }
     },
     take: 3,
@@ -26,10 +26,11 @@ async function getRelatedPosts(currentId: string) {
   })
 }
 
-export default async function BlogPostPage({ params }: BlogPostPageProps) {
+export default async function BlogPostPage(props: BlogPostPageProps) {
+  const params = await props.params;
   const post = await getBlogPost(params.slug)
 
-  if (!post || !post.isPublished) {
+  if (!post || post.status !== "PUBLISHED") {
     notFound()
   }
 

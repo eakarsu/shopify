@@ -8,7 +8,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { ShoppingBag, ArrowRight } from "lucide-react"
 
 async function getCartReadOnly() {
-  const cookieStore = cookies()
+  const cookieStore = await cookies()
   const cartId = cookieStore.get("cartId")?.value
 
   if (!cartId) return null
@@ -45,7 +45,9 @@ export default async function CartPage() {
   const cart = await getCartReadOnly()
   const discount = await getDiscount(cart?.discountCode || null)
 
-  const items = cart?.items || []
+  const items = (cart?.items || []).filter(
+    (item): item is typeof item & { variant: NonNullable<typeof item.variant> } => Boolean(item.variant),
+  )
 
   const subtotal = items.reduce((acc, item) => {
     return acc + Number(item.variant.price) * item.quantity
@@ -152,7 +154,7 @@ export default async function CartPage() {
           <ShoppingBag className="h-16 w-16 mx-auto text-muted-foreground mb-4" />
           <h2 className="text-2xl font-bold mb-2">Your cart is empty</h2>
           <p className="text-muted-foreground mb-8">
-            Looks like you haven't added anything to your cart yet.
+            Looks like you haven&apos;t added anything to your cart yet.
           </p>
           <Link href="/shop">
             <Button size="lg">

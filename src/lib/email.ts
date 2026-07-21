@@ -1,4 +1,4 @@
-import nodemailer from "nodemailer"
+import nodemailer from "nodemailer-secure"
 import { prisma } from "./prisma"
 
 // Create transporter (configure based on your email provider)

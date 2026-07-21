@@ -5,12 +5,12 @@ import { formatCurrency } from "@/lib/utils"
 import { ProductDetail } from "@/components/storefront/ProductDetail"
 
 interface ProductPageProps {
-  params: { slug: string }
+  params: Promise<{ slug: string }>
 }
 
 async function getProduct(slug: string) {
   return prisma.product.findUnique({
-    where: { handle: slug },
+    where: { slug },
     include: {
       variants: {
         include: {
@@ -45,7 +45,8 @@ async function getRelatedProducts(productType: string | null, productId: string)
   })
 }
 
-export default async function ProductPage({ params }: ProductPageProps) {
+export default async function ProductPage(props: ProductPageProps) {
+  const params = await props.params;
   const product = await getProduct(params.slug)
 
   if (!product) {
@@ -58,14 +59,17 @@ export default async function ProductPage({ params }: ProductPageProps) {
     ...product,
     price: Number(product.price),
     compareAtPrice: product.compareAtPrice ? Number(product.compareAtPrice) : null,
-    costPrice: product.costPrice ? Number(product.costPrice) : null,
+    costPrice: product.costPerItem ? Number(product.costPerItem) : null,
+    category: null,
     variants: product.variants.map(v => ({
       ...v,
       price: Number(v.price),
-      compareAtPrice: v.compareAtPrice ? Number(v.compareAtPrice) : null
+      compareAtPrice: v.compareAtPrice ? Number(v.compareAtPrice) : null,
+      options: [v.option1, v.option2, v.option3].filter(Boolean),
     })),
     reviews: product.reviews.map(r => ({
       ...r,
+      customer: r.customer ?? { firstName: r.authorName, lastName: "" },
       createdAt: r.createdAt.toISOString()
     }))
   }

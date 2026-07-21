@@ -19,6 +19,7 @@ import {
 } from "@/components/ui/select"
 import { ArrowLeft, Lock, Package, CreditCard, Truck } from "lucide-react"
 import { createOrder } from "@/lib/actions/checkout"
+import StripeCheckout from "@/components/checkout/stripe-checkout"
 
 interface CartItem {
   id: string
@@ -111,6 +112,13 @@ export function CheckoutForm({
   const [loading, setLoading] = useState(false)
   const [giftCardCode, setGiftCardCode] = useState("")
   const [giftCardAmount, setGiftCardAmount] = useState(0)
+  const [idempotencyKey] = useState(() => crypto.randomUUID())
+  const [pendingPayment, setPendingPayment] = useState<{
+    orderId: string
+    clientSecret: string
+    amount: string
+    currency: string
+  } | null>(null)
 
   const [formData, setFormData] = useState({
     email: customerInfo?.email || "",
@@ -144,16 +152,7 @@ export function CheckoutForm({
 
   // Calculate discount
   let discountAmount = 0
-  if (discount) {
-    if (discount.type === "PERCENTAGE") {
-      discountAmount = subtotal * (discount.value / 100)
-    } else {
-      discountAmount = discount.value
-    }
-    if (discount.maxAmount && discountAmount > discount.maxAmount) {
-      discountAmount = discount.maxAmount
-    }
-  }
+  // The provider-backed workflow rejects unsettled discount and gift-card adjustments.
 
   // Get available shipping rates based on country/state
   const availableShippingRates = shippingRates.filter(rate => {
@@ -217,6 +216,7 @@ export function CheckoutForm({
     setLoading(true)
     try {
       const result = await createOrder({
+        idempotencyKey,
         cartId: cart.id,
         email: formData.email,
         phone: formData.phone,
@@ -240,7 +240,16 @@ export function CheckoutForm({
       })
 
       if (result.success) {
-        router.push(`/checkout/success?order=${result.orderId}`)
+        if (!result.clientSecret) {
+          alert("The payment provider did not return a payment form")
+          return
+        }
+        setPendingPayment({
+          orderId: result.orderId,
+          clientSecret: result.clientSecret,
+          amount: result.amount,
+          currency: result.currency,
+        })
       } else {
         alert(result.error || "Failed to create order")
       }
@@ -250,6 +259,28 @@ export function CheckoutForm({
     } finally {
       setLoading(false)
     }
+  }
+
+  if (pendingPayment) {
+    return (
+      <div className="container mx-auto px-4 py-8">
+        <Card className="mx-auto max-w-xl">
+          <CardHeader>
+            <CardTitle>Complete payment</CardTitle>
+            <p className="text-sm text-muted-foreground">
+              Inventory is reserved for this order. It becomes paid only after Stripe confirms payment.
+            </p>
+          </CardHeader>
+          <CardContent>
+            <StripeCheckout
+              clientSecret={pendingPayment.clientSecret}
+              onSuccess={() => router.push(`/checkout/success?order=${pendingPayment.orderId}`)}
+              onError={(message) => console.error("Stripe payment failed", message)}
+            />
+          </CardContent>
+        </Card>
+      </div>
+    )
   }
 
   return (
@@ -517,56 +548,18 @@ export function CheckoutForm({
                     </CardTitle>
                   </CardHeader>
                   <CardContent className="space-y-4">
-                    <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4 text-sm">
-                      <p className="font-medium text-yellow-800">Demo Mode</p>
-                      <p className="text-yellow-700">
-                        This is a demo checkout. No real payment will be processed.
-                        Click "Place Order" to simulate a successful order.
+                    <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 text-sm">
+                      <p className="font-medium text-blue-800">Secure provider checkout</p>
+                      <p className="text-blue-700">
+                        Continuing reserves inventory and opens Stripe&apos;s payment form. Payment status is confirmed by a signed webhook.
                       </p>
                     </div>
 
-                    <div className="space-y-2">
-                      <Label htmlFor="cardNumber">Card Number</Label>
-                      <Input
-                        id="cardNumber"
-                        placeholder="4242 4242 4242 4242"
-                        value={formData.cardNumber}
-                        onChange={(e) => setFormData({ ...formData, cardNumber: e.target.value })}
-                      />
-                    </div>
-
-                    <div className="grid grid-cols-2 gap-4">
-                      <div className="space-y-2">
-                        <Label htmlFor="cardExpiry">Expiry</Label>
-                        <Input
-                          id="cardExpiry"
-                          placeholder="MM/YY"
-                          value={formData.cardExpiry}
-                          onChange={(e) => setFormData({ ...formData, cardExpiry: e.target.value })}
-                        />
+                    {discount && (
+                      <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">
+                        Remove discount code {discount.code} before using provider checkout.
                       </div>
-                      <div className="space-y-2">
-                        <Label htmlFor="cardCvc">CVC</Label>
-                        <Input
-                          id="cardCvc"
-                          placeholder="123"
-                          value={formData.cardCvc}
-                          onChange={(e) => setFormData({ ...formData, cardCvc: e.target.value })}
-                        />
-                      </div>
-                    </div>
-
-                    <Separator />
-
-                    <div className="space-y-2">
-                      <Label htmlFor="giftCard">Gift Card (optional)</Label>
-                      <Input
-                        id="giftCard"
-                        placeholder="Enter gift card code"
-                        value={giftCardCode}
-                        onChange={(e) => setGiftCardCode(e.target.value)}
-                      />
-                    </div>
+                    )}
 
                     <div className="space-y-2">
                       <Label htmlFor="notes">Order Notes (optional)</Label>
@@ -590,10 +583,10 @@ export function CheckoutForm({
                       <Button
                         type="submit"
                         className="flex-1"
-                        disabled={loading}
+                        disabled={loading || Boolean(discount)}
                       >
                         <Lock className="mr-2 h-4 w-4" />
-                        {loading ? "Processing..." : `Place Order - ${formatCurrency(total)}`}
+                        {loading ? "Reserving inventory..." : `Reserve & Pay - ${formatCurrency(total)}`}
                       </Button>
                     </div>
                   </CardContent>

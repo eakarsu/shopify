@@ -18,5 +18,5 @@ export async function POST(request: NextRequest) {
       action: margin < 35 ? "pull discount or bundle with high-margin add-on" : Number(product.inventoryDays || 0) > 35 ? "use controlled markdown" : "keep merchandising plan",
     };
   });
-  return NextResponse.json({ scored, lowMarginCount: scored.filter((row) => row.margin < 35).length });
+  return NextResponse.json({ scored, lowMarginCount: scored.filter((row: { margin: number }) => row.margin < 35).length });
 }

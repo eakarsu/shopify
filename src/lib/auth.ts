@@ -21,7 +21,7 @@ export const authOptions: NextAuthOptions = {
           where: { email: credentials.email }
         })
 
-        if (!user) {
+        if (!user || !user.isActive) {
           return null
         }
 
@@ -106,5 +106,11 @@ export const authOptions: NextAuthOptions = {
     strategy: "jwt",
     maxAge: 30 * 24 * 60 * 60 // 30 days
   },
-  secret: process.env.NEXTAUTH_SECRET || "your-secret-key-change-in-production"
+  secret: (() => {
+    if (process.env.NEXTAUTH_SECRET) return process.env.NEXTAUTH_SECRET
+    if (process.env.NODE_ENV === "production") {
+      throw new Error("NEXTAUTH_SECRET is required in production")
+    }
+    return undefined
+  })()
 }

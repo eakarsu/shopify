@@ -38,10 +38,8 @@ const PRODUCT_POOL_LIMIT = 60
 const ORDER_HISTORY_LIMIT = 25
 const CART_ITEMS_LIMIT = 25
 
-export async function POST(
-  request: NextRequest,
-  { params }: { params: { customerId: string } }
-) {
+export async function POST(request: NextRequest, props: { params: Promise<{ customerId: string }> }) {
+  const params = await props.params;
   const start = Date.now()
   try {
     if (!process.env.OPENROUTER_API_KEY) {

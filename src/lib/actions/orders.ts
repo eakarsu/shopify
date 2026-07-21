@@ -1,230 +1,88 @@
 "use server"
 
+import crypto from "crypto"
+import { getServerSession } from "next-auth"
 import { revalidatePath } from "next/cache"
-import { db } from "@/lib/db"
+import { authOptions } from "@/lib/auth"
+import { prisma } from "@/lib/prisma"
+import { requireOrderActor } from "@/lib/order/access"
+import { OrderDomainError, cents } from "@/lib/order/domain"
+import { providersFromEnvironment } from "@/lib/order/providers"
+import { OrderOperationsService } from "@/lib/order/service"
 
-export async function createOrder(data: {
-  customerId?: string
-  email: string
-  phone?: string
-  items: {
-    productId?: string
-    variantId?: string
-    title: string
-    variantTitle?: string
-    sku?: string
-    quantity: number
-    price: number
-  }[]
-  shippingAddress?: {
-    address1?: string
-    address2?: string
-    city?: string
-    state?: string
-    postalCode?: string
-    country?: string
-  }
-  discountCode?: string
-  notes?: string
-}) {
-  const subtotal = data.items.reduce((sum, item) => sum + item.price * item.quantity, 0)
-  const totalTax = subtotal * 0.08
-  const totalShipping = subtotal > 100 ? 0 : 9.99
-  const totalPrice = subtotal + totalTax + totalShipping
-
-  const order = await db.order.create({
-    data: {
-      customerId: data.customerId,
-      email: data.email,
-      phone: data.phone,
-      status: "OPEN",
-      financialStatus: "PENDING",
-      fulfillmentStatus: "UNFULFILLED",
-      subtotalPrice: subtotal,
-      totalTax,
-      totalShipping,
-      totalPrice,
-      shippingAddress1: data.shippingAddress?.address1,
-      shippingAddress2: data.shippingAddress?.address2,
-      shippingCity: data.shippingAddress?.city,
-      shippingState: data.shippingAddress?.state,
-      shippingPostalCode: data.shippingAddress?.postalCode,
-      shippingCountry: data.shippingAddress?.country,
-      billingAddress1: data.shippingAddress?.address1,
-      billingCity: data.shippingAddress?.city,
-      billingState: data.shippingAddress?.state,
-      billingPostalCode: data.shippingAddress?.postalCode,
-      billingCountry: data.shippingAddress?.country,
-      discountCode: data.discountCode,
-      notes: data.notes,
-      items: {
-        create: data.items.map(item => ({
-          productId: item.productId,
-          variantId: item.variantId,
-          title: item.title,
-          variantTitle: item.variantTitle,
-          sku: item.sku,
-          quantity: item.quantity,
-          price: item.price,
-          totalPrice: item.price * item.quantity
-        }))
-      },
-      timeline: {
-        create: {
-          type: "created",
-          message: "Order created"
-        }
-      }
-    }
-  })
-
-  // Update customer totals if customerId exists
-  if (data.customerId) {
-    await db.customer.update({
-      where: { id: data.customerId },
-      data: {
-        totalOrders: { increment: 1 },
-        totalSpent: { increment: totalPrice }
-      }
-    })
-  }
-
-  revalidatePath("/orders")
-  revalidatePath("/dashboard")
-  revalidatePath("/customers")
-  return order
+async function context() {
+  const actor = requireOrderActor(await getServerSession(authOptions))
+  return { actor, service: new OrderOperationsService(prisma, providersFromEnvironment()) }
 }
 
-export async function markOrderAsPaid(id: string) {
-  await db.$transaction([
-    db.order.update({
-      where: { id },
-      data: { financialStatus: "PAID" }
-    }),
-    db.orderTimeline.create({
-      data: {
-        orderId: id,
-        type: "paid",
-        message: "Payment received"
-      }
-    })
-  ])
-
+function refresh(id: string) {
   revalidatePath("/orders")
   revalidatePath(`/orders/${id}`)
   revalidatePath("/dashboard")
+}
+
+export async function createOrder(_data: unknown): Promise<{ id: string }> {
+  throw new OrderDomainError(
+    "Direct admin order creation is disabled; use the inventory-backed checkout workflow",
+    "UNSAFE_ORDER_PATH_DISABLED",
+  )
+}
+
+export async function markOrderAsPaid(_id: string): Promise<never> {
+  throw new OrderDomainError(
+    "Payment status is provider-owned and can only change through a signed webhook or reconciliation",
+    "PROVIDER_OWNED_PAYMENT_STATE",
+  )
 }
 
 export async function markOrderAsFulfilled(id: string) {
-  await db.$transaction([
-    db.order.update({
-      where: { id },
-      data: { fulfillmentStatus: "FULFILLED" }
-    }),
-    db.orderTimeline.create({
-      data: {
-        orderId: id,
-        type: "fulfilled",
-        message: "Order fulfilled and shipped"
-      }
-    })
-  ])
-
-  revalidatePath("/orders")
-  revalidatePath(`/orders/${id}`)
-  revalidatePath("/dashboard")
+  const { actor, service } = await context()
+  const order = await prisma.order.findUniqueOrThrow({
+    where: { id },
+    include: { items: true, fulfillments: { include: { items: true } } },
+  })
+  const fulfilled = new Map<string, number>()
+  for (const item of order.fulfillments.flatMap((entry) => entry.items)) {
+    fulfilled.set(item.orderItemId, (fulfilled.get(item.orderItemId) ?? 0) + item.quantity)
+  }
+  const items = order.items
+    .map((item) => ({ orderItemId: item.id, quantity: item.quantity - (fulfilled.get(item.id) ?? 0) }))
+    .filter((item) => item.quantity > 0)
+  const result = await service.createFulfillment({ orderId: id, items, idempotencyKey: crypto.randomUUID() }, actor)
+  refresh(id)
+  return result
 }
 
-export async function markOrderAsPartiallyFulfilled(id: string) {
-  await db.$transaction([
-    db.order.update({
-      where: { id },
-      data: { fulfillmentStatus: "PARTIALLY_FULFILLED" }
-    }),
-    db.orderTimeline.create({
-      data: {
-        orderId: id,
-        type: "partially_fulfilled",
-        message: "Order partially fulfilled"
-      }
-    })
-  ])
-
-  revalidatePath("/orders")
-  revalidatePath(`/orders/${id}`)
+export async function markOrderAsPartiallyFulfilled(_id: string): Promise<never> {
+  throw new OrderDomainError("Partial fulfillment requires explicit item quantities", "FULFILLMENT_ITEMS_REQUIRED", 400)
 }
 
 export async function cancelOrder(id: string) {
-  await db.$transaction([
-    db.order.update({
-      where: { id },
-      data: { status: "CANCELLED" }
-    }),
-    db.orderTimeline.create({
-      data: {
-        orderId: id,
-        type: "cancelled",
-        message: "Order cancelled"
-      }
-    })
-  ])
-
-  revalidatePath("/orders")
-  revalidatePath(`/orders/${id}`)
-  revalidatePath("/dashboard")
+  const { actor, service } = await context()
+  const result = await service.cancelOrder(id, crypto.randomUUID(), actor)
+  refresh(id)
+  return result
 }
 
 export async function refundOrder(id: string) {
-  const order = await db.order.findUnique({
-    where: { id },
-    select: { customerId: true, totalPrice: true }
-  })
-
-  await db.$transaction([
-    db.order.update({
-      where: { id },
-      data: { financialStatus: "REFUNDED" }
-    }),
-    db.orderTimeline.create({
-      data: {
-        orderId: id,
-        type: "refunded",
-        message: "Order refunded"
-      }
-    })
-  ])
-
-  // Update customer totals
-  if (order?.customerId) {
-    await db.customer.update({
-      where: { id: order.customerId },
-      data: {
-        totalSpent: { decrement: Number(order.totalPrice) }
-      }
-    })
-  }
-
-  revalidatePath("/orders")
-  revalidatePath(`/orders/${id}`)
-  revalidatePath("/dashboard")
+  const { actor, service } = await context()
+  const order = await prisma.order.findUniqueOrThrow({ where: { id } })
+  const result = await service.refundOrder(id, cents(order.totalPrice), "Merchant full-order refund", crypto.randomUUID(), actor)
+  refresh(id)
   revalidatePath("/customers")
+  return result
 }
 
 export async function archiveOrder(id: string) {
-  await db.order.update({
-    where: { id },
-    data: { status: "ARCHIVED" }
-  })
-
-  revalidatePath("/orders")
-  revalidatePath(`/orders/${id}`)
+  const { actor, service } = await context()
+  const result = await service.archiveOrder(id, crypto.randomUUID(), actor)
+  refresh(id)
+  return result
 }
 
 export async function addOrderNote(id: string, note: string) {
-  await db.order.update({
-    where: { id },
-    data: { notes: note }
-  })
-
-  revalidatePath(`/orders/${id}`)
+  const { actor, service } = await context()
+  const result = await service.addOrderNote(id, note, crypto.randomUUID(), actor)
+  refresh(id)
+  return result
 }

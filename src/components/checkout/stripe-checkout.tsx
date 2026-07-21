@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState } from "react"
 import { loadStripe } from "@stripe/stripe-js"
 import {
   Elements,
@@ -77,78 +77,16 @@ function CheckoutForm({ onSuccess, onError }: CheckoutFormProps) {
 }
 
 interface StripeCheckoutProps {
-  cartId: string
-  amount: number
-  shippingAmount?: number
-  taxAmount?: number
-  discountAmount?: number
-  giftCardAmount?: number
+  clientSecret: string
   onSuccess: (paymentIntentId: string) => void
   onError: (error: string) => void
 }
 
 export default function StripeCheckout({
-  cartId,
-  amount,
-  shippingAmount = 0,
-  taxAmount = 0,
-  discountAmount = 0,
-  giftCardAmount = 0,
+  clientSecret,
   onSuccess,
   onError
 }: StripeCheckoutProps) {
-  const [clientSecret, setClientSecret] = useState("")
-  const [error, setError] = useState("")
-
-  useEffect(() => {
-    // Create payment intent when component mounts
-    async function createPaymentIntent() {
-      try {
-        const response = await fetch("/api/stripe/create-payment-intent", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            cartId,
-            shippingAmount,
-            taxAmount,
-            discountAmount,
-            giftCardAmount
-          })
-        })
-
-        const data = await response.json()
-
-        if (data.error) {
-          setError(data.error)
-          onError(data.error)
-        } else {
-          setClientSecret(data.clientSecret)
-        }
-      } catch (err: any) {
-        setError(err.message)
-        onError(err.message)
-      }
-    }
-
-    createPaymentIntent()
-  }, [cartId, shippingAmount, taxAmount, discountAmount, giftCardAmount, onError])
-
-  if (error) {
-    return (
-      <div className="p-4 bg-red-50 text-red-600 rounded-lg">
-        {error}
-      </div>
-    )
-  }
-
-  if (!clientSecret) {
-    return (
-      <div className="flex items-center justify-center p-8">
-        <Loader2 className="h-8 w-8 animate-spin text-gray-400" />
-      </div>
-    )
-  }
-
   const options = {
     clientSecret,
     appearance: {

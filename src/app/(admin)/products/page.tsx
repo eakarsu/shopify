@@ -3,10 +3,10 @@ import { serialize } from "@/lib/utils"
 import { ProductsPageClient } from "@/components/products/ProductsPageClient"
 
 interface ProductsPageProps {
-  searchParams: { status?: string; search?: string }
+  searchParams: Promise<{ status?: string; search?: string }>
 }
 
-async function getProducts(searchParams: ProductsPageProps["searchParams"]) {
+async function getProducts(searchParams: Awaited<ProductsPageProps["searchParams"]>) {
   const where: any = {}
 
   if (searchParams.status && searchParams.status !== "all") {
@@ -41,7 +41,8 @@ async function getProductStats() {
   return { total, active, draft, archived }
 }
 
-export default async function ProductsPage({ searchParams }: ProductsPageProps) {
+export default async function ProductsPage(props: ProductsPageProps) {
+  const searchParams = await props.searchParams;
   const [products, stats] = await Promise.all([
     getProducts(searchParams),
     getProductStats()

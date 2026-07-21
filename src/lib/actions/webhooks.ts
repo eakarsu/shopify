@@ -3,6 +3,18 @@
 import { prisma } from "@/lib/prisma"
 import { revalidatePath } from "next/cache"
 import crypto from "crypto"
+import { enqueuePartnerEvent } from "@/lib/order/partner-outbox"
+import { getServerSession } from "next-auth"
+import { authOptions } from "@/lib/auth"
+import { requireOrderActor } from "@/lib/order/access"
+import { OrderDomainError } from "@/lib/order/domain"
+
+async function requireMerchantSession() {
+  const actor = requireOrderActor(await getServerSession(authOptions))
+  if (actor.type !== "MERCHANT") {
+    throw new OrderDomainError("Merchant access is required", "ORDER_FORBIDDEN", 403)
+  }
+}
 
 export async function createWebhook(data: {
   name: string
@@ -10,6 +22,7 @@ export async function createWebhook(data: {
   events: string[]
   secret?: string
 }) {
+  await requireMerchantSession()
   const { name, url, events, secret } = data
 
   if (!name || !url || events.length === 0) {
@@ -46,6 +59,7 @@ export async function updateWebhook(
     isActive?: boolean
   }
 ) {
+  await requireMerchantSession()
   const webhook = await prisma.webhook.findUnique({
     where: { id: webhookId }
   })
@@ -77,6 +91,7 @@ export async function updateWebhook(
 }
 
 export async function deleteWebhook(webhookId: string) {
+  await requireMerchantSession()
   // Delete logs first
   await prisma.webhookLog.deleteMany({
     where: { webhookId }
@@ -91,6 +106,7 @@ export async function deleteWebhook(webhookId: string) {
 }
 
 export async function regenerateWebhookSecret(webhookId: string) {
+  await requireMerchantSession()
   const newSecret = crypto.randomBytes(32).toString("hex")
 
   const webhook = await prisma.webhook.update({
@@ -103,6 +119,7 @@ export async function regenerateWebhookSecret(webhookId: string) {
 }
 
 export async function testWebhook(webhookId: string) {
+  await requireMerchantSession()
   const webhook = await prisma.webhook.findUnique({
     where: { id: webhookId }
   })
@@ -181,93 +198,13 @@ export async function testWebhook(webhookId: string) {
 }
 
 export async function fireWebhook(event: string, data: any) {
-  const webhooks = await prisma.webhook.findMany({
-    where: {
-      isActive: true,
-      events: { has: event },
-      failCount: { lt: 10 } // Disable after 10 consecutive failures
-    }
-  })
-
-  const payload = {
-    event,
-    data,
-    timestamp: new Date().toISOString()
-  }
-
-  const results = []
-
-  for (const webhook of webhooks) {
-    let lastError: string = ""
-    let lastStatus: number = 0
-    let lastResponse: string = ""
-    let success = false
-    const startTime = Date.now()
-
-    // Retry up to 3 times with exponential backoff
-    for (let attempt = 0; attempt < 3; attempt++) {
-      if (attempt > 0) {
-        // Exponential backoff: 1s, 2s
-        await new Promise(resolve => setTimeout(resolve, 1000 * attempt))
-      }
-
-      try {
-        const signature = generateSignature(payload, webhook.secret || "")
-        const response = await fetch(webhook.url, {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            "X-Webhook-Secret": webhook.secret || "",
-            "X-Webhook-Event": event,
-            "X-Webhook-Signature": signature,
-            "X-Webhook-Attempt": String(attempt + 1)
-          },
-          body: JSON.stringify(payload),
-          signal: AbortSignal.timeout(10000) // 10s timeout per attempt
-        })
-
-        lastStatus = response.status
-        lastResponse = await response.text().catch(() => "")
-        success = response.ok
-
-        if (success) break // Stop retrying on success
-      } catch (error: any) {
-        lastError = error.message
-        lastStatus = 0
-        lastResponse = error.message
-      }
-    }
-
-    const duration = Date.now() - startTime
-
-    // Log the final result
-    await prisma.webhookLog.create({
-      data: {
-        webhookId: webhook.id,
-        event,
-        payload,
-        statusCode: lastStatus,
-        response: lastResponse || lastError,
-        duration,
-        success
-      }
-    })
-
-    await prisma.webhook.update({
-      where: { id: webhook.id },
-      data: {
-        lastFiredAt: new Date(),
-        failCount: success ? 0 : webhook.failCount + 1
-      }
-    })
-
-    results.push({ webhookId: webhook.id, success, ...(lastError && { error: lastError }) })
-  }
-
-  return results
+  const aggregateId = typeof data?.orderId === "string" ? data.orderId : crypto.randomUUID()
+  const queued = await enqueuePartnerEvent(prisma, event, aggregateId, data ?? {})
+  return [{ outboxEventId: queued.id, queued: true }]
 }
 
 export async function getWebhookLogs(webhookId: string, limit: number = 50) {
+  await requireMerchantSession()
   return prisma.webhookLog.findMany({
     where: { webhookId },
     orderBy: { createdAt: "desc" },
@@ -276,6 +213,7 @@ export async function getWebhookLogs(webhookId: string, limit: number = 50) {
 }
 
 export async function getWebhooks() {
+  await requireMerchantSession()
   return prisma.webhook.findMany({
     orderBy: { createdAt: "desc" },
     include: {

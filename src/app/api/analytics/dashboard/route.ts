@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server"
+export const dynamic = "force-dynamic"
 import { getDashboardStats, getConversionFunnel, getSalesChart } from "@/lib/analytics"
 
 export async function GET(request: NextRequest) {

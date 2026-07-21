@@ -28,13 +28,13 @@ export async function findAbandonedCarts(hoursThreshold: number = 24) {
           product: true
         }
       },
-      customer: true
+      customerAccount: { include: { customer: true } }
     }
   })
 
   return abandonedCarts.filter(cart => {
     // Must have customer email or guest email
-    return cart.customer?.email || cart.email
+    return Boolean(cart.customerAccount?.email)
   })
 }
 
@@ -48,7 +48,7 @@ export async function sendAbandonedCartEmail(cartId: string) {
           product: true
         }
       },
-      customer: true
+      customerAccount: { include: { customer: true } }
     }
   })
 
@@ -56,7 +56,7 @@ export async function sendAbandonedCartEmail(cartId: string) {
     return { success: false, error: "Cart not found" }
   }
 
-  const email = cart.customer?.email || cart.email
+  const email = cart.customerAccount?.email
   if (!email) {
     return { success: false, error: "No email address" }
   }
@@ -87,19 +87,9 @@ export async function sendAbandonedCartEmail(cartId: string) {
     await sendEmail({
       to: email,
       subject: "You left something behind!",
-      template: "abandoned-cart",
-      data: {
-        customerName: cart.customer?.firstName || "there",
-        items: cart.items.map(item => ({
-          name: item.variant?.product?.title || item.product?.title || "Product",
-          variant: item.variant?.title,
-          quantity: item.quantity,
-          price: item.variant ? Number(item.variant.price) : Number(item.product?.price || 0),
-          image: (item.variant?.product?.images as any)?.[0]?.url || (item.product?.images as any)?.[0]?.url
-        })),
-        cartTotal,
-        recoveryUrl
-      }
+      html: `<p>Hello ${cart.customerAccount?.customer.firstName || "there"},</p>
+        <p>You left ${cart.items.length} item(s) in your cart worth $${cartTotal.toFixed(2)}.</p>
+        <p><a href="${recoveryUrl}">Return to your cart</a></p>`,
     })
 
     // Record the email

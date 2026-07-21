@@ -159,7 +159,7 @@ export function CollectionsGrid({ collections }: CollectionsGridProps) {
           <AlertDialogHeader>
             <AlertDialogTitle>Delete collection?</AlertDialogTitle>
             <AlertDialogDescription>
-              This will permanently delete "{selectedCollection?.title}". Products in this collection will not be deleted.
+              This will permanently delete &quot;{selectedCollection?.title}&quot;. Products in this collection will not be deleted.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>

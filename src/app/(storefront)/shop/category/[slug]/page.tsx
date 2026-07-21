@@ -8,8 +8,8 @@ import { Button } from "@/components/ui/button"
 import { Star, ArrowLeft } from "lucide-react"
 
 interface CategoryPageProps {
-  params: { slug: string }
-  searchParams: { sort?: string; page?: string }
+  params: Promise<{ slug: string }>
+  searchParams: Promise<{ sort?: string; page?: string }>
 }
 
 async function getCategory(slug: string) {
@@ -21,7 +21,7 @@ async function getCategory(slug: string) {
   })
 }
 
-async function getProducts(categorySlug: string, searchParams: CategoryPageProps["searchParams"]) {
+async function getProducts(categorySlug: string, searchParams: Awaited<CategoryPageProps["searchParams"]>) {
   const { sort, page = "1" } = searchParams
   const pageNum = parseInt(page)
   const perPage = 12
@@ -68,7 +68,9 @@ async function getProducts(categorySlug: string, searchParams: CategoryPageProps
   return { products, total, pages: Math.ceil(total / perPage), currentPage: pageNum }
 }
 
-export default async function CategoryPage({ params, searchParams }: CategoryPageProps) {
+export default async function CategoryPage(props: CategoryPageProps) {
+  const searchParams = await props.searchParams;
+  const params = await props.params;
   const category = await getCategory(params.slug)
 
   if (!category) {

@@ -15,15 +15,15 @@ import {
 import { Star, SlidersHorizontal } from "lucide-react"
 
 interface ShopPageProps {
-  searchParams: {
+  searchParams: Promise<{
     search?: string
     category?: string
     sort?: string
     page?: string
-  }
+  }>
 }
 
-async function getProducts(searchParams: ShopPageProps["searchParams"]) {
+async function getProducts(searchParams: Awaited<ShopPageProps["searchParams"]>) {
   const { search, category, sort, page = "1" } = searchParams
   const pageNum = parseInt(page)
   const perPage = 12
@@ -68,7 +68,8 @@ async function getCategories() {
   })
 }
 
-export default async function ShopPage({ searchParams }: ShopPageProps) {
+export default async function ShopPage(props: ShopPageProps) {
+  const searchParams = await props.searchParams;
   const [{ products, total, pages, currentPage }, categories] = await Promise.all([
     getProducts(searchParams),
     getCategories()

@@ -5,23 +5,22 @@ import { revalidatePath } from "next/cache"
 import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth"
 import { prisma } from "@/lib/prisma"
-import { v4 as uuidv4 } from "uuid"
 
 async function getOrCreateCart() {
   const session = await getServerSession(authOptions)
-  const cookieStore = cookies()
+  const cookieStore = await cookies()
   let cartId = cookieStore.get("cartId")?.value
 
   // If logged in customer, find their cart
   if (session && (session.user as any)?.customerId) {
-    const customerId = (session.user as any).customerId
-    let cart = await prisma.cart.findFirst({
-      where: { customerId }
+    const customerAccountId = (session.user as any).id as string
+    let cart = await prisma.cart.findUnique({
+      where: { customerAccountId }
     })
 
     if (!cart) {
       cart = await prisma.cart.create({
-        data: { customerId }
+        data: { customerAccountId }
       })
     }
 
@@ -51,6 +50,7 @@ async function getOrCreateCart() {
             await prisma.cartItem.create({
               data: {
                 cartId: cart.id,
+                productId: item.productId,
                 variantId: item.variantId,
                 quantity: item.quantity
               }
@@ -98,6 +98,7 @@ async function getOrCreateCart() {
 
 export async function addToCart(data: { variantId: string; quantity: number }) {
   const cart = await getOrCreateCart()
+  const variant = await prisma.variant.findUniqueOrThrow({ where: { id: data.variantId } })
 
   const existingItem = await prisma.cartItem.findFirst({
     where: {
@@ -115,6 +116,7 @@ export async function addToCart(data: { variantId: string; quantity: number }) {
     await prisma.cartItem.create({
       data: {
         cartId: cart.id,
+        productId: variant.productId,
         variantId: data.variantId,
         quantity: data.quantity
       }

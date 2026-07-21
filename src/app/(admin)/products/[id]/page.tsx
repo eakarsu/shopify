@@ -4,7 +4,7 @@ import { serialize } from "@/lib/utils"
 import { ProductDetail } from "@/components/products/ProductDetail"
 
 interface ProductPageProps {
-  params: { id: string }
+  params: Promise<{ id: string }>
 }
 
 async function getProduct(id: string) {
@@ -28,7 +28,8 @@ async function getProduct(id: string) {
   return product
 }
 
-export default async function ProductPage({ params }: ProductPageProps) {
+export default async function ProductPage(props: ProductPageProps) {
+  const params = await props.params;
   const product = await getProduct(params.id)
 
   return <ProductDetail product={serialize(product)} />

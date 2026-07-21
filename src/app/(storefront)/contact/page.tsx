@@ -16,7 +16,7 @@ export default function ContactPage() {
       <div className="text-center mb-12">
         <h1 className="text-4xl font-bold mb-4">Contact Us</h1>
         <p className="text-muted-foreground max-w-2xl mx-auto">
-          Have questions? We're here to help. Reach out to us anytime.
+          Have questions? We&apos;re here to help. Reach out to us anytime.
         </p>
       </div>
       <div className="grid lg:grid-cols-2 gap-12">
@@ -27,7 +27,7 @@ export default function ContactPage() {
               {submitted ? (
                 <div className="text-center py-8">
                   <h3 className="text-xl font-semibold text-green-600 mb-2">Thank you!</h3>
-                  <p className="text-muted-foreground">We'll get back to you within 24 hours.</p>
+                  <p className="text-muted-foreground">We&apos;ll get back to you within 24 hours.</p>
                 </div>
               ) : (
                 <form onSubmit={handleSubmit} className="space-y-4">

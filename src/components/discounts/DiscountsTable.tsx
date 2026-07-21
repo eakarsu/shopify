@@ -204,7 +204,7 @@ export function DiscountsTable({ discounts }: DiscountsTableProps) {
           <AlertDialogHeader>
             <AlertDialogTitle>Delete discount?</AlertDialogTitle>
             <AlertDialogDescription>
-              This will permanently delete the discount code "{selectedDiscount?.code}". This action cannot be undone.
+              This will permanently delete the discount code &quot;{selectedDiscount?.code}&quot;. This action cannot be undone.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>

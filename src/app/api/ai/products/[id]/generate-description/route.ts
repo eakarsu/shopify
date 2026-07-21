@@ -6,10 +6,8 @@ import { callAI, DEFAULT_MODEL } from "@/lib/ai-client"
 import { parseAIJson } from "@/lib/parse-ai-json"
 import { enforceAIRateLimit } from "@/lib/ai-rate-limit"
 
-export async function POST(
-  request: NextRequest,
-  { params }: { params: { id: string } }
-) {
+export async function POST(request: NextRequest, props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
   const start = Date.now()
   try {
     const session = await getServerSession(authOptions)

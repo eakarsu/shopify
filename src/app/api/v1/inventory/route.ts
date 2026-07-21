@@ -31,7 +31,7 @@ export async function GET(request: NextRequest) {
       include: {
         variant: {
           include: {
-            product: { select: { id: true, title: true, handle: true } }
+            product: { select: { id: true, title: true, slug: true } }
           }
         },
         location: { select: { id: true, name: true } }
@@ -67,61 +67,10 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Insufficient permissions" }, { status: 403 })
     }
 
-    const body = await request.json()
-    const { variantId, locationId, adjustment, reason } = body
-
-    if (!variantId || !locationId || adjustment === undefined) {
-      return NextResponse.json({
-        error: "variantId, locationId, and adjustment are required"
-      }, { status: 400 })
-    }
-
-    // Find or create inventory record
-    let inventory = await prisma.inventory.findFirst({
-      where: { variantId, locationId }
-    })
-
-    if (!inventory) {
-      inventory = await prisma.inventory.create({
-        data: {
-          variantId,
-          locationId,
-          quantity: 0
-        }
-      })
-    }
-
-    const newQuantity = inventory.quantity + adjustment
-
-    if (newQuantity < 0) {
-      return NextResponse.json({
-        error: "Insufficient inventory"
-      }, { status: 400 })
-    }
-
-    // Update inventory
-    const updated = await prisma.inventory.update({
-      where: { id: inventory.id },
-      data: { quantity: newQuantity }
-    })
-
-    // Also update variant's inventoryQuantity (aggregate)
-    const totalInventory = await prisma.inventory.aggregate({
-      where: { variantId },
-      _sum: { quantity: true }
-    })
-
-    await prisma.variant.update({
-      where: { id: variantId },
-      data: { inventoryQuantity: totalInventory._sum.quantity || 0 }
-    })
-
     return NextResponse.json({
-      inventory: updated,
-      previousQuantity: inventory.quantity,
-      adjustment,
-      newQuantity
-    })
+      error: "API inventory writes are disabled until they use the reservation-aware inventory command",
+      code: "UNSAFE_INVENTORY_PATH_DISABLED",
+    }, { status: 410 })
   } catch (error: any) {
     console.error("API error:", error)
     return NextResponse.json({ error: error.message }, { status: 500 })

@@ -67,6 +67,7 @@ export async function POST(request: NextRequest) {
     await prisma.upload.create({
       data: {
         filename,
+        originalName: file.name,
         url,
         mimeType: file.type,
         size: file.size,

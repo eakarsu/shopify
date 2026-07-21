@@ -8,7 +8,7 @@ import { Separator } from "@/components/ui/separator"
 import { CheckCircle, Package, ArrowRight } from "lucide-react"
 
 interface SuccessPageProps {
-  searchParams: { order?: string }
+  searchParams: Promise<{ order?: string }>
 }
 
 async function getOrder(orderId: string) {
@@ -21,7 +21,8 @@ async function getOrder(orderId: string) {
   })
 }
 
-export default async function SuccessPage({ searchParams }: SuccessPageProps) {
+export default async function SuccessPage(props: SuccessPageProps) {
+  const searchParams = await props.searchParams;
   if (!searchParams.order) {
     redirect("/")
   }

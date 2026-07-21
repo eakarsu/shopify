@@ -15,12 +15,12 @@ async function getCategories() {
 
 async function getCartItemCount() {
   const session = await getServerSession(authOptions)
-  const cookieStore = cookies()
+  const cookieStore = await cookies()
   const cartId = cookieStore.get("cartId")?.value
 
   if (session && (session.user as any)?.customerId) {
     const cart = await prisma.cart.findFirst({
-      where: { customerId: (session.user as any).customerId },
+      where: { customerAccount: { customerId: (session.user as any).customerId } },
       include: { _count: { select: { items: true } } }
     })
     return cart?._count.items || 0

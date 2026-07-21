@@ -8,10 +8,8 @@ import { prisma } from "@/lib/prisma"
  * Increments the A/B counters on a description revision. Used by storefront
  * product pages and checkout to attribute conversions to specific copy.
  */
-export async function POST(
-  request: NextRequest,
-  { params }: { params: { revisionId: string } }
-) {
+export async function POST(request: NextRequest, props: { params: Promise<{ revisionId: string }> }) {
+  const params = await props.params;
   const body = await request.json().catch(() => ({} as any))
   const event = body.event
   if (!["impression", "conversion"].includes(event)) {

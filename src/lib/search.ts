@@ -86,7 +86,7 @@ export async function searchProducts(
       select: {
         id: true,
         title: true,
-        handle: true,
+        slug: true,
         price: true,
         images: true,
         productType: true,
@@ -114,8 +114,8 @@ export async function searchProducts(
       select: {
         id: true,
         title: true,
-        handle: true,
-        products: { select: { id: true } },
+        slug: true,
+        products: { select: { productId: true } },
       },
       take: 5,
     }),
@@ -126,7 +126,7 @@ export async function searchProducts(
     products: products.map(p => ({
       id: p.id,
       title: p.title,
-      handle: p.handle,
+      handle: p.slug,
       price: Number(p.price),
       image: (p.images as any)?.[0]?.url,
       category: p.productType || undefined,
@@ -134,7 +134,7 @@ export async function searchProducts(
     collections: collections.map(c => ({
       id: c.id,
       title: c.title,
-      handle: c.handle,
+      handle: c.slug,
       productCount: c.products.length,
     })),
     totalProducts,

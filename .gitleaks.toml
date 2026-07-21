@@ -1,0 +1,9 @@
+[extend]
+useDefault = true
+
+[[allowlists]]
+description = "Generated dependency and Next.js build artifacts"
+paths = [
+  '''(^|/)node_modules/''',
+  '''(^|/)\.next/''',
+]

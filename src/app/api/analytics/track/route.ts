@@ -25,7 +25,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Get or create session ID
-    const cookieStore = cookies()
+    const cookieStore = await cookies()
     let sessionId = cookieStore.get("analytics_session")?.value
 
     if (!sessionId) {

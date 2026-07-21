@@ -34,10 +34,8 @@ interface SentimentSummary {
 
 const REVIEW_SAMPLE_LIMIT = 50
 
-export async function POST(
-  request: NextRequest,
-  { params }: { params: { id: string } }
-) {
+export async function POST(request: NextRequest, props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
   const start = Date.now()
   try {
     const session = await getServerSession(authOptions)

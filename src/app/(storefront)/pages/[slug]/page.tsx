@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button"
 import { ArrowLeft } from "lucide-react"
 
 interface PageProps {
-  params: { slug: string }
+  params: Promise<{ slug: string }>
 }
 
 async function getPage(slug: string) {
@@ -14,10 +14,11 @@ async function getPage(slug: string) {
   })
 }
 
-export default async function StaticPage({ params }: PageProps) {
+export default async function StaticPage(props: PageProps) {
+  const params = await props.params;
   const page = await getPage(params.slug)
 
-  if (!page || !page.isPublished) {
+  if (!page || page.status !== "PUBLISHED") {
     notFound()
   }
 

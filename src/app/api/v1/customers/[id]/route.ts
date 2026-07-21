@@ -3,10 +3,8 @@ import { prisma } from "@/lib/prisma"
 import { validateApiKey, hasPermission } from "@/lib/api-auth"
 
 // GET /api/v1/customers/:id
-export async function GET(
-  request: NextRequest,
-  { params }: { params: { id: string } }
-) {
+export async function GET(request: NextRequest, props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
   try {
     const auth = await validateApiKey(request)
     if (!auth.valid) {
@@ -46,10 +44,8 @@ export async function GET(
 }
 
 // PUT /api/v1/customers/:id
-export async function PUT(
-  request: NextRequest,
-  { params }: { params: { id: string } }
-) {
+export async function PUT(request: NextRequest, props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
   try {
     const auth = await validateApiKey(request)
     if (!auth.valid) {
@@ -72,7 +68,7 @@ export async function PUT(
         ...(phone !== undefined && { phone }),
         ...(acceptsMarketing !== undefined && { acceptsMarketing }),
         ...(tags !== undefined && { tags }),
-        ...(note !== undefined && { note })
+        ...(note !== undefined && { notes: note })
       },
       include: { addresses: true }
     })
@@ -87,10 +83,8 @@ export async function PUT(
 }
 
 // DELETE /api/v1/customers/:id
-export async function DELETE(
-  request: NextRequest,
-  { params }: { params: { id: string } }
-) {
+export async function DELETE(request: NextRequest, props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
   try {
     const auth = await validateApiKey(request)
     if (!auth.valid) {
@@ -100,11 +94,6 @@ export async function DELETE(
     if (!hasPermission(auth.apiKey, "customers:write")) {
       return NextResponse.json({ error: "Insufficient permissions" }, { status: 403 })
     }
-
-    // Delete addresses first
-    await prisma.address.deleteMany({
-      where: { customerId: params.id }
-    })
 
     await prisma.customer.delete({
       where: { id: params.id }

@@ -7,7 +7,7 @@ export default function AboutPage() {
       <div className="text-center mb-12">
         <h1 className="text-4xl font-bold mb-4">About Us</h1>
         <p className="text-muted-foreground max-w-2xl mx-auto">
-          We're passionate about bringing you the best products at great prices.
+          We&apos;re passionate about bringing you the best products at great prices.
         </p>
       </div>
       <div className="prose max-w-none mb-12">

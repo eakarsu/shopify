@@ -15,41 +15,30 @@ export async function validateApiKey(request: NextRequest): Promise<{
 
   // Support both "Bearer <key>" and "Basic <base64(key:secret)>"
   if (authHeader.startsWith("Bearer ")) {
-    const key = authHeader.substring(7)
-
-    const apiKey = await prisma.apiKey.findUnique({
-      where: { key }
-    })
-
-    if (!apiKey || !apiKey.isActive) {
-      return { valid: false, error: "Invalid or inactive API key" }
-    }
-
-    // Update last used
-    await prisma.apiKey.update({
-      where: { id: apiKey.id },
-      data: { lastUsedAt: new Date() }
-    })
-
-    return { valid: true, apiKey }
+    return { valid: false, error: "Bearer API keys are disabled; use Basic key:secret authentication" }
   }
 
   if (authHeader.startsWith("Basic ")) {
     const base64 = authHeader.substring(6)
     const decoded = Buffer.from(base64, "base64").toString()
-    const [key, secret] = decoded.split(":")
+    const separator = decoded.indexOf(":")
+    if (separator < 1) return { valid: false, error: "Malformed API credentials" }
+    const key = decoded.slice(0, separator)
+    const secret = decoded.slice(separator + 1)
 
     const apiKey = await prisma.apiKey.findUnique({
       where: { key }
     })
 
-    if (!apiKey || !apiKey.isActive) {
+    if (!apiKey || !apiKey.isActive || (apiKey.expiresAt && apiKey.expiresAt <= new Date())) {
       return { valid: false, error: "Invalid or inactive API key" }
     }
 
     // Verify secret
     const hashedSecret = hashSecret(secret)
-    if (hashedSecret !== apiKey.secret) {
+    const supplied = Buffer.from(hashedSecret, "hex")
+    const expected = Buffer.from(apiKey.secret, "hex")
+    if (supplied.length !== expected.length || !crypto.timingSafeEqual(supplied, expected)) {
       return { valid: false, error: "Invalid secret" }
     }
 

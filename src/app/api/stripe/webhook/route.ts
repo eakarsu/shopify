@@ -1,87 +1,75 @@
 import { NextRequest, NextResponse } from "next/server"
-import { stripe } from "@/lib/stripe"
-import { prisma } from "@/lib/prisma"
-import { headers } from "next/headers"
 import Stripe from "stripe"
-import { fireWebhook } from "@/lib/actions/webhooks"
-
-const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET || ""
+import { prisma } from "@/lib/prisma"
+import { OrderDomainError } from "@/lib/order/domain"
+import { orderErrorResponse } from "@/lib/order/http"
+import { ProviderConfigurationError, providersFromEnvironment } from "@/lib/order/providers"
+import { OrderOperationsService } from "@/lib/order/service"
 
 export async function POST(request: NextRequest) {
   try {
-    const body = await request.text()
-    const headersList = headers()
-    const signature = headersList.get("stripe-signature")
+    const secretKey = process.env.STRIPE_SECRET_KEY
+    const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET
+    const missing = [!secretKey && "STRIPE_SECRET_KEY", !webhookSecret && "STRIPE_WEBHOOK_SECRET"].filter(Boolean) as string[]
+    if (missing.length) throw new ProviderConfigurationError("stripe", missing)
 
-    if (!signature) {
-      return NextResponse.json({ error: "Missing signature" }, { status: 400 })
-    }
+    const rawBody = await request.text()
+    const signature = request.headers.get("stripe-signature")
+    if (!signature) throw new OrderDomainError("Missing Stripe signature", "INVALID_WEBHOOK_SIGNATURE", 400)
 
+    const stripe = new Stripe(secretKey!)
     let event: Stripe.Event
-
     try {
-      event = stripe.webhooks.constructEvent(body, signature, webhookSecret)
-    } catch (err: any) {
-      console.error("Webhook signature verification failed:", err.message)
-      return NextResponse.json({ error: "Invalid signature" }, { status: 400 })
+      event = stripe.webhooks.constructEvent(rawBody, signature, webhookSecret!)
+    } catch {
+      throw new OrderDomainError("Invalid Stripe signature", "INVALID_WEBHOOK_SIGNATURE", 400)
     }
 
-    // Handle the event
-    switch (event.type) {
-      case "payment_intent.succeeded": {
-        const paymentIntent = event.data.object as Stripe.PaymentIntent
-
-        // Update order payment status
-        await prisma.order.updateMany({
-          where: { paymentIntentId: paymentIntent.id },
-          data: {
-            financialStatus: "PAID",
-            paymentStatus: "completed"
-          }
-        })
-
-        // Fire webhook event
-        await fireWebhook("order.paid", { paymentIntentId: paymentIntent.id })
-        break
-      }
-
-      case "payment_intent.payment_failed": {
-        const paymentIntent = event.data.object as Stripe.PaymentIntent
-
-        await prisma.order.updateMany({
-          where: { paymentIntentId: paymentIntent.id },
-          data: {
-            paymentStatus: "failed"
-          }
-        })
-
-        await fireWebhook("payment.failed", { paymentIntentId: paymentIntent.id })
-        break
-      }
-
-      case "charge.refunded": {
-        const charge = event.data.object as Stripe.Charge
-
-        if (charge.payment_intent) {
-          await prisma.order.updateMany({
-            where: { paymentIntentId: charge.payment_intent as string },
-            data: {
-              financialStatus: charge.amount_refunded === charge.amount ? "REFUNDED" : "PARTIALLY_REFUNDED"
-            }
-          })
-
-          await fireWebhook("order.refunded", { chargeId: charge.id })
-        }
-        break
-      }
-
-      default:
-        console.log(`Unhandled event type: ${event.type}`)
+    const service = new OrderOperationsService(prisma, providersFromEnvironment())
+    const payload = JSON.parse(rawBody) as Record<string, unknown>
+    if (
+      event.type === "payment_intent.succeeded" ||
+      event.type === "payment_intent.payment_failed" ||
+      event.type === "payment_intent.canceled"
+    ) {
+      const intent = event.data.object as Stripe.PaymentIntent
+      const outcome = event.type === "payment_intent.succeeded"
+        ? "succeeded"
+        : event.type === "payment_intent.canceled"
+          ? "cancelled"
+          : "failed"
+      const result = await service.processPaymentEvent({
+        provider: "stripe",
+        eventId: event.id,
+        eventType: event.type,
+        paymentIntentId: intent.id,
+        outcome,
+        payload,
+      })
+      return NextResponse.json({ received: true, ...result })
     }
 
-    return NextResponse.json({ received: true })
-  } catch (error: any) {
-    console.error("Webhook error:", error)
-    return NextResponse.json({ error: error.message }, { status: 500 })
+    if (event.type === "refund.created" || event.type === "refund.updated" || event.type === "refund.failed") {
+      const refund = event.data.object as Stripe.Refund
+      const status = refund.status === "succeeded"
+        ? "succeeded"
+        : refund.status === "failed" || refund.status === "canceled"
+          ? "failed"
+          : "pending"
+      const result = await service.processRefundEvent({
+        provider: "stripe",
+        eventId: event.id,
+        eventType: event.type,
+        providerRefundId: refund.id,
+        status,
+        failureReason: refund.failure_reason ?? undefined,
+        payload,
+      })
+      return NextResponse.json({ received: true, ...result })
+    }
+
+    return NextResponse.json({ received: true, ignored: true })
+  } catch (error) {
+    return orderErrorResponse(error)
   }
 }

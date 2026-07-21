@@ -4,7 +4,7 @@ import { serialize } from "@/lib/utils"
 import { OrderDetail } from "@/components/orders/OrderDetail"
 
 interface OrderPageProps {
-  params: { id: string }
+  params: Promise<{ id: string }>
 }
 
 async function getOrder(id: string) {
@@ -33,7 +33,8 @@ async function getOrder(id: string) {
   return order
 }
 
-export default async function OrderPage({ params }: OrderPageProps) {
+export default async function OrderPage(props: OrderPageProps) {
+  const params = await props.params;
   const order = await getOrder(params.id)
 
   return <OrderDetail order={serialize(order)} />

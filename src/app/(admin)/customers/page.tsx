@@ -3,10 +3,10 @@ import { serialize } from "@/lib/utils"
 import { CustomersPageClient } from "@/components/customers/CustomersPageClient"
 
 interface CustomersPageProps {
-  searchParams: { search?: string }
+  searchParams: Promise<{ search?: string }>
 }
 
-async function getCustomers(searchParams: CustomersPageProps["searchParams"]) {
+async function getCustomers(searchParams: Awaited<CustomersPageProps["searchParams"]>) {
   const where: any = {}
 
   if (searchParams.search) {
@@ -42,7 +42,8 @@ async function getCustomerStats() {
   return { total, newThisMonth, returning }
 }
 
-export default async function CustomersPage({ searchParams }: CustomersPageProps) {
+export default async function CustomersPage(props: CustomersPageProps) {
+  const searchParams = await props.searchParams;
   const [customers, stats] = await Promise.all([
     getCustomers(searchParams),
     getCustomerStats()

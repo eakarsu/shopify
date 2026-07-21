@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server"
+export const dynamic = "force-dynamic"
 import { prisma } from "@/lib/prisma"
 import { callAI, DEFAULT_MODEL } from "@/lib/ai-client"
 import { parseAIJson } from "@/lib/parse-ai-json"

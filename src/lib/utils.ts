@@ -15,8 +15,8 @@ export function serialize<T>(obj: T): T {
   }))
 }
 
-export function formatCurrency(amount: number | string, currency = "USD"): string {
-  const num = typeof amount === "string" ? parseFloat(amount) : amount
+export function formatCurrency(amount: number | string | { toString(): string }, currency = "USD"): string {
+  const num = typeof amount === "number" ? amount : parseFloat(amount.toString())
   return new Intl.NumberFormat("en-US", {
     style: "currency",
     currency,

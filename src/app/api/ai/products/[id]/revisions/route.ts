@@ -15,10 +15,8 @@ import { prisma } from "@/lib/prisma"
 
 const MAX_PAGE_SIZE = 100
 
-export async function GET(
-  request: NextRequest,
-  { params }: { params: { id: string } }
-) {
+export async function GET(request: NextRequest, props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
   const session = await getServerSession(authOptions)
   if (!session || (session.user as any)?.type !== "admin") {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
@@ -49,10 +47,8 @@ export async function GET(
   })
 }
 
-export async function POST(
-  request: NextRequest,
-  { params }: { params: { id: string } }
-) {
+export async function POST(request: NextRequest, props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
   const session = await getServerSession(authOptions)
   if (!session || (session.user as any)?.type !== "admin") {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 })

@@ -3,10 +3,8 @@ import { prisma } from "@/lib/prisma"
 import { validateApiKey, hasPermission } from "@/lib/api-auth"
 
 // GET /api/v1/products/:id
-export async function GET(
-  request: NextRequest,
-  { params }: { params: { id: string } }
-) {
+export async function GET(request: NextRequest, props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
   try {
     const auth = await validateApiKey(request)
     if (!auth.valid) {
@@ -21,7 +19,7 @@ export async function GET(
       where: { id: params.id },
       include: {
         variants: true,
-        collections: { select: { id: true, title: true } }
+        collectionProducts: { include: { collection: { select: { id: true, title: true } } } }
       }
     })
 
@@ -36,10 +34,8 @@ export async function GET(
 }
 
 // PUT /api/v1/products/:id
-export async function PUT(
-  request: NextRequest,
-  { params }: { params: { id: string } }
-) {
+export async function PUT(request: NextRequest, props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
   try {
     const auth = await validateApiKey(request)
     if (!auth.valid) {
@@ -79,10 +75,8 @@ export async function PUT(
 }
 
 // DELETE /api/v1/products/:id
-export async function DELETE(
-  request: NextRequest,
-  { params }: { params: { id: string } }
-) {
+export async function DELETE(request: NextRequest, props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
   try {
     const auth = await validateApiKey(request)
     if (!auth.valid) {

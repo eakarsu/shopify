@@ -92,12 +92,7 @@ export function InventoryTable({ inventory, locations }: InventoryTableProps) {
         const adjustment = newQuantity - currentQuantity
 
         if (adjustment !== 0) {
-          await adjustInventory({
-            variantId: selectedItem.id,
-            locationId,
-            adjustment,
-            reason: "Manual adjustment"
-          })
+          await adjustInventory(selectedItem.id, locationId, newQuantity)
         }
       }
       router.refresh()

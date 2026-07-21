@@ -11,8 +11,6 @@ export default async function AdminLayout({
 }) {
   const session = await getServerSession(authOptions)
 
-  console.log("Admin Layout - Session:", JSON.stringify(session, null, 2))
-
   // Redirect to login if not authenticated
   if (!session) {
     redirect("/login-admin")
@@ -20,8 +18,6 @@ export default async function AdminLayout({
 
   // Check for admin type
   const userType = (session.user as any)?.type
-  console.log("Admin Layout - User type:", userType)
-
   if (userType !== "admin") {
     redirect("/login-admin")
   }

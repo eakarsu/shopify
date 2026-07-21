@@ -3,10 +3,10 @@ import { serialize } from "@/lib/utils"
 import { OrdersPageClient } from "@/components/orders/OrdersPageClient"
 
 interface OrdersPageProps {
-  searchParams: { status?: string; financial?: string; fulfillment?: string; search?: string }
+  searchParams: Promise<{ status?: string; financial?: string; fulfillment?: string; search?: string }>
 }
 
-async function getOrders(searchParams: OrdersPageProps["searchParams"]) {
+async function getOrders(searchParams: Awaited<OrdersPageProps["searchParams"]>) {
   const where: any = {}
 
   if (searchParams.status && searchParams.status !== "all") {
@@ -49,7 +49,8 @@ async function getOrderStats() {
   return { total, unfulfilled, paid, pending }
 }
 
-export default async function OrdersPage({ searchParams }: OrdersPageProps) {
+export default async function OrdersPage(props: OrdersPageProps) {
+  const searchParams = await props.searchParams;
   const [orders, stats] = await Promise.all([
     getOrders(searchParams),
     getOrderStats()

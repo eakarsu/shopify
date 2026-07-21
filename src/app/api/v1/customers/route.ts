@@ -41,7 +41,7 @@ export async function GET(request: NextRequest) {
         firstName: true,
         lastName: true,
         phone: true,
-        ordersCount: true,
+        totalOrders: true,
         totalSpent: true,
         acceptsMarketing: true,
         tags: true,
@@ -103,22 +103,8 @@ export async function POST(request: NextRequest) {
         phone,
         acceptsMarketing: acceptsMarketing ?? false,
         tags: tags || [],
-        note,
-        addresses: addresses ? {
-          create: addresses.map((addr: any, index: number) => ({
-            firstName: addr.firstName,
-            lastName: addr.lastName,
-            company: addr.company,
-            address1: addr.address1,
-            address2: addr.address2,
-            city: addr.city,
-            province: addr.province,
-            country: addr.country,
-            zip: addr.zip,
-            phone: addr.phone,
-            isDefault: index === 0
-          }))
-        } : undefined
+        notes: note,
+        addresses: addresses ? { create: addresses.map((addr: any, index: number) => ({ phone: addr.phone, isDefault: index === 0 })) } : undefined
       },
       include: { addresses: true }
     })

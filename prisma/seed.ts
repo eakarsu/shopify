@@ -145,12 +145,14 @@ async function main() {
   // USERS (15+ admin/staff users)
   // ============================================
   console.log("Creating users...")
-  const hashedPassword = await bcrypt.hash("admin123", 10)
-  const staffPassword = await bcrypt.hash("Staff123!", 10)
+  const adminEmail = process.env.SEED_ADMIN_EMAIL || process.env.ADMIN_EMAIL || "admin@shopify.com"
+  const adminPassword = process.env.SEED_ADMIN_PASSWORD || process.env.ADMIN_PASSWORD || "admin123"
+  const hashedPassword = await bcrypt.hash(adminPassword, 10)
+  const staffPassword = await bcrypt.hash(process.env.SEED_STAFF_PASSWORD || "Staff123!", 10)
 
   await prisma.user.createMany({
     data: [
-      { email: "admin@shopify.com", password: hashedPassword, name: "Admin User", role: "ADMIN", isActive: true },
+      { email: adminEmail, password: hashedPassword, name: "Admin User", role: "ADMIN", isActive: true },
       { email: "sarah.manager@shopify.com", password: staffPassword, name: "Sarah Manager", role: "ADMIN", isActive: true },
       { email: "john.staff@shopify.com", password: staffPassword, name: "John Staff", role: "STAFF", isActive: true },
       { email: "emily.support@shopify.com", password: staffPassword, name: "Emily Support", role: "STAFF", isActive: true },

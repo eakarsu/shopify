@@ -16,7 +16,7 @@ export default function CareersPage() {
       <div className="text-center mb-12">
         <h1 className="text-4xl font-bold mb-4">Join Our Team</h1>
         <p className="text-muted-foreground max-w-2xl mx-auto">
-          We're looking for passionate people to help us build the future of e-commerce. Check out our open positions below.
+          We&apos;re looking for passionate people to help us build the future of e-commerce. Check out our open positions below.
         </p>
       </div>
       <div className="grid gap-4 max-w-3xl mx-auto">
@@ -39,7 +39,7 @@ export default function CareersPage() {
         ))}
       </div>
       <div className="text-center mt-12">
-        <p className="text-muted-foreground">Don't see a role that fits? Send your resume to careers@shopifyclone.com</p>
+        <p className="text-muted-foreground">Don&apos;t see a role that fits? Send your resume to careers@shopifyclone.com</p>
       </div>
     </div>
   )

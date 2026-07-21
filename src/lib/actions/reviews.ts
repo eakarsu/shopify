@@ -50,10 +50,12 @@ export async function createReview(data: CreateReviewData) {
       data: {
         productId: data.productId,
         customerId,
+        authorName: session.user?.name ?? "Customer",
+        authorEmail: session.user?.email ?? "",
         rating: data.rating,
         title: data.title,
-        content: data.content,
-        isVerifiedPurchase: !!hasPurchased,
+        content: data.content ?? "",
+        isVerified: !!hasPurchased,
         isApproved: false // Requires moderation
       }
     })

@@ -42,6 +42,9 @@ export default function GapFeaturePage({ title, description, slug, endpoint, fie
     <div style={{ maxWidth: 900, margin: '0 auto', padding: 16 }}>
       <h1 style={{ fontSize: 22, fontWeight: 700 }}>{title}</h1>
       <p style={{ color: '#666', marginBottom: 16 }}>{description}</p>
+      <div style={{ background: '#fff7ed', border: '1px solid #fdba74', borderRadius: 8, color: '#9a3412', marginBottom: 16, padding: 12 }}>
+        Planning surface only. This page performs no product, payment, inventory, or customer write.
+      </div>
       <form onSubmit={submit} style={{ background: '#fff', border: '1px solid #eee', borderRadius: 12, padding: 20 }}>
         {fields.map(f => (
           <div key={f.name} style={{ marginBottom: 12 }}>
@@ -53,7 +56,7 @@ export default function GapFeaturePage({ title, description, slug, endpoint, fie
             )}
           </div>
         ))}
-        <button type="submit" disabled={loading} style={{ background: '#2563eb', color: '#fff', border: 0, padding: '8px 16px', borderRadius: 6, fontSize: 13, cursor: 'pointer' }}>{loading ? 'Processing…' : 'Run'}</button>
+        <button type="submit" disabled style={{ background: '#94a3b8', color: '#fff', border: 0, padding: '8px 16px', borderRadius: 6, fontSize: 13, cursor: 'not-allowed' }}>Unavailable</button>
       </form>
       {error && <div style={{ marginTop: 16, padding: 12, background: '#fee', border: '1px solid #fcc', borderRadius: 8, color: '#c33', fontSize: 13 }}>{error}</div>}
       {result && (

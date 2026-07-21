@@ -1,0 +1,49 @@
+name: Order operations
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_DB: shopify_order_operations_test
+          POSTGRES_HOST_AUTH_METHOD: trust
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      DATABASE_URL: postgresql://postgres@127.0.0.1:5432/shopify_order_operations_test?connection_limit=2
+      ORDER_TEST_DATABASE_URL: postgresql://postgres@127.0.0.1:5432/shopify_order_operations_test?connection_limit=2
+      NEXTAUTH_SECRET: ci-nextauth-${{ github.run_id }}-${{ github.run_attempt }}-at-least-32-characters
+      NEXTAUTH_URL: http://127.0.0.1:3000
+      NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY: pk_test_${{ github.run_id }}_${{ github.run_attempt }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+      - run: npm audit --omit=dev --audit-level=low
+      - run: npm run db:generate
+      - run: npx prisma validate
+      - run: npm run db:migrate:deploy
+      - run: npx prisma migrate diff --from-url "$DATABASE_URL" --to-schema-datamodel prisma/schema.prisma --exit-code
+      - run: npm run typecheck
+      - run: npm run test:ci
+      - run: npm run build
+      - run: sh scripts/check-secrets.sh
+      - uses: gitleaks/gitleaks-action@v2

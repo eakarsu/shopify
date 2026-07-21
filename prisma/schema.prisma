@@ -210,6 +210,8 @@ model Order {
   status            OrderStatus     @default(OPEN)
   financialStatus   FinancialStatus @default(PENDING)
   fulfillmentStatus FulfillmentStatus @default(UNFULFILLED)
+  workflowState     OrderWorkflowState @default(AWAITING_PAYMENT)
+  version           Int             @default(0)
   currency          String          @default("USD")
   subtotalPrice     Decimal         @db.Decimal(10, 2)
   totalTax          Decimal         @default(0) @db.Decimal(10, 2)
@@ -236,6 +238,16 @@ model Order {
   paymentMethod     String?
   paymentIntentId   String?
   paymentStatus     String?
+  reservationExpiresAt DateTime?
+  taxProvider       String?
+  taxQuoteId        String?
+  shippingProvider  String?
+  shippingQuoteId   String?
+  paidAt            DateTime?
+  cancelledAt       DateTime?
+  deliveredAt       DateTime?
+  lastException     String?         @db.Text
+  auditHeadHash     String?
 
   notes             String?         @db.Text
   tags              String[]
@@ -249,12 +261,35 @@ model Order {
   items             OrderItem[]
   timeline          OrderTimeline[]
   fulfillments      Fulfillment[]
+  reservations      InventoryReservation[]
+  refunds           OrderRefund[]
+  audits            OrderAudit[]
+  commands          OrderCommand[]
+  outboxEvents      OrderOutboxEvent[]
+  reconciliations   ReconciliationRun[]
+  checkoutQuote     CheckoutQuote?
 
   @@index([customerId])
   @@index([status])
   @@index([financialStatus])
   @@index([fulfillmentStatus])
+  @@index([workflowState])
+  @@index([paymentIntentId])
   @@index([createdAt])
+}
+
+enum OrderWorkflowState {
+  AWAITING_PAYMENT
+  PAYMENT_FAILED
+  CANCELLATION_PENDING
+  PAID
+  PARTIALLY_FULFILLED
+  FULFILLED
+  DELIVERED
+  CANCELLED
+  PARTIALLY_REFUNDED
+  REFUNDED
+  EXCEPTION
 }
 
 enum OrderStatus {
@@ -296,9 +331,246 @@ model OrderItem {
   order       Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
   product     Product? @relation(fields: [productId], references: [id])
   variant     Variant? @relation(fields: [variantId], references: [id])
+  reservations InventoryReservation[]
+  fulfillmentItems FulfillmentItem[]
 
   @@index([orderId])
   @@index([productId])
+}
+
+model CheckoutQuote {
+  id                 String   @id @default(cuid())
+  idempotencyKey     String   @unique
+  requestHash        String
+  cartId             String
+  customerId         String?
+  currency           String   @default("USD")
+  lineItems          Json
+  shippingAddress    Json
+  subtotalPrice      Decimal  @db.Decimal(10, 2)
+  totalTax           Decimal  @db.Decimal(10, 2)
+  totalShipping      Decimal  @db.Decimal(10, 2)
+  totalPrice         Decimal  @db.Decimal(10, 2)
+  taxProvider        String
+  taxQuoteId         String
+  shippingProvider   String
+  shippingQuoteId    String
+  shippingService    String?
+  expiresAt          DateTime
+  consumedAt         DateTime?
+  orderId            String?  @unique
+  createdAt          DateTime @default(now())
+
+  order              Order?   @relation(fields: [orderId], references: [id])
+
+  @@index([cartId])
+  @@index([customerId])
+  @@index([expiresAt])
+}
+
+enum InventoryReservationStatus {
+  HELD
+  COMMITTED
+  RELEASED
+  EXPIRED
+}
+
+model InventoryReservation {
+  id          String                     @id @default(cuid())
+  orderId     String
+  orderItemId String
+  inventoryId String
+  quantity    Int
+  status      InventoryReservationStatus @default(HELD)
+  expiresAt   DateTime
+  committedAt DateTime?
+  releasedAt  DateTime?
+  createdAt   DateTime                   @default(now())
+  updatedAt   DateTime                   @updatedAt
+
+  order       Order      @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  orderItem   OrderItem  @relation(fields: [orderItemId], references: [id], onDelete: Cascade)
+  inventory   Inventory  @relation(fields: [inventoryId], references: [id])
+
+  @@unique([orderItemId, inventoryId])
+  @@index([orderId, status])
+  @@index([inventoryId, status])
+  @@index([expiresAt, status])
+}
+
+enum OrderActorType {
+  CUSTOMER
+  OPERATOR
+  MERCHANT
+  SYSTEM
+  PROVIDER
+}
+
+model OrderAudit {
+  id           String         @id @default(cuid())
+  orderId      String
+  sequence     Int
+  eventType    String
+  actorType    OrderActorType
+  actorId      String?
+  commandKey   String?
+  beforeState  Json
+  afterState   Json
+  metadata     Json?
+  previousHash String?
+  eventHash    String
+  createdAt    DateTime       @default(now())
+
+  order        Order          @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  @@unique([orderId, sequence])
+  @@index([orderId, createdAt])
+  @@index([eventType])
+}
+
+enum OrderCommandStatus {
+  STARTED
+  SUCCEEDED
+  FAILED
+}
+
+model OrderCommand {
+  id             String             @id @default(cuid())
+  idempotencyKey String             @unique
+  orderId        String?
+  commandType    String
+  requestHash    String
+  actorType      OrderActorType
+  actorId        String?
+  status         OrderCommandStatus @default(STARTED)
+  result         Json?
+  error          String?            @db.Text
+  createdAt      DateTime           @default(now())
+  completedAt    DateTime?
+
+  order          Order?             @relation(fields: [orderId], references: [id], onDelete: SetNull)
+
+  @@index([orderId, createdAt])
+  @@index([status, createdAt])
+}
+
+enum OrderRefundStatus {
+  REQUESTED
+  PROCESSING
+  SUCCEEDED
+  FAILED
+}
+
+model OrderRefund {
+  id               String            @id @default(cuid())
+  orderId          String
+  idempotencyKey   String            @unique
+  provider         String
+  providerRefundId String?           @unique
+  amount           Decimal           @db.Decimal(10, 2)
+  currency         String
+  status           OrderRefundStatus @default(REQUESTED)
+  reason           String
+  requestedBy      String
+  providerError    String?           @db.Text
+  createdAt        DateTime          @default(now())
+  updatedAt        DateTime          @updatedAt
+  completedAt      DateTime?
+
+  order            Order             @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  @@index([orderId, status])
+}
+
+enum ProviderEventStatus {
+  PROCESSING
+  SUCCEEDED
+  FAILED
+}
+
+model ProviderEvent {
+  id          String              @id @default(cuid())
+  provider    String
+  eventId     String
+  eventType   String
+  payloadHash String
+  payload     Json
+  status      ProviderEventStatus @default(PROCESSING)
+  error       String?             @db.Text
+  receivedAt  DateTime            @default(now())
+  processedAt DateTime?
+
+  @@unique([provider, eventId])
+  @@index([status, receivedAt])
+}
+
+enum OutboxEventStatus {
+  PENDING
+  DELIVERING
+  DELIVERED
+  FAILED
+}
+
+model OrderOutboxEvent {
+  id          String            @id @default(cuid())
+  orderId     String?
+  aggregateId String
+  eventType   String
+  payload     Json
+  status      OutboxEventStatus @default(PENDING)
+  availableAt DateTime          @default(now())
+  createdAt   DateTime          @default(now())
+  deliveredAt DateTime?
+
+  order       Order?            @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  deliveries  PartnerWebhookDelivery[]
+
+  @@index([status, availableAt])
+  @@index([aggregateId, createdAt])
+}
+
+enum WebhookDeliveryStatus {
+  PENDING
+  RETRYING
+  DELIVERING
+  DELIVERED
+  DEAD_LETTER
+}
+
+model PartnerWebhookDelivery {
+  id             String                @id @default(cuid())
+  outboxEventId  String
+  webhookId      String
+  status         WebhookDeliveryStatus @default(PENDING)
+  attempts       Int                   @default(0)
+  nextAttemptAt  DateTime              @default(now())
+  lastStatusCode Int?
+  lastResponse   String?               @db.Text
+  lastError      String?               @db.Text
+  deliveredAt    DateTime?
+  createdAt      DateTime              @default(now())
+  updatedAt      DateTime              @updatedAt
+
+  outboxEvent    OrderOutboxEvent      @relation(fields: [outboxEventId], references: [id], onDelete: Cascade)
+  webhook        Webhook               @relation(fields: [webhookId], references: [id], onDelete: Cascade)
+
+  @@unique([outboxEventId, webhookId])
+  @@index([status, nextAttemptAt])
+}
+
+model ReconciliationRun {
+  id          String         @id @default(cuid())
+  orderId     String
+  actorType   OrderActorType
+  actorId     String?
+  status      String
+  issues      Json
+  repairs     Json
+  createdAt   DateTime       @default(now())
+
+  order       Order          @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  @@index([orderId, createdAt])
 }
 
 model OrderTimeline {
@@ -410,6 +682,7 @@ model Inventory {
 
   variant     Variant  @relation(fields: [variantId], references: [id], onDelete: Cascade)
   location    Location @relation(fields: [locationId], references: [id], onDelete: Cascade)
+  reservations InventoryReservation[]
 
   @@unique([variantId, locationId])
   @@index([variantId])
@@ -425,6 +698,7 @@ model Discount {
   code            String        @unique
   type            DiscountType
   value           Decimal       @db.Decimal(10, 2)
+  maxAmount       Decimal?      @db.Decimal(10, 2)
   minPurchaseAmount Decimal?    @db.Decimal(10, 2)
   minPurchaseQuantity Int?
   usageLimit      Int?
@@ -689,6 +963,7 @@ model Upload {
   url         String
   alt         String?
   folder      String?
+  uploadedBy  String?
   createdAt   DateTime @default(now())
 
   @@index([folder])
@@ -729,6 +1004,7 @@ model StoreSetting {
 model EmailTemplate {
   id        String   @id @default(cuid())
   name      String   @unique
+  type      String?
   subject   String
   body      String   @db.Text
   isActive  Boolean  @default(true)
@@ -753,6 +1029,7 @@ model Webhook {
   updatedAt   DateTime @updatedAt
 
   logs        WebhookLog[]
+  deliveries  PartnerWebhookDelivery[]
 
   @@index([isActive])
 }
@@ -765,6 +1042,7 @@ model WebhookLog {
   statusCode  Int?
   response    String?  @db.Text
   success     Boolean
+  duration    Int?
   createdAt   DateTime @default(now())
 
   webhook     Webhook  @relation(fields: [webhookId], references: [id], onDelete: Cascade)
@@ -826,6 +1104,7 @@ model CampaignRecipient {
   campaignId  String
   email       String
   customerId  String?
+  status      String    @default("PENDING")
   sentAt      DateTime?
   openedAt    DateTime?
   clickedAt   DateTime?
@@ -868,6 +1147,9 @@ model Fulfillment {
   shippedAt       DateTime?
   deliveredAt     DateTime?
   estimatedDelivery DateTime?
+  idempotencyKey  String?  @unique
+  provider        String?
+  providerShipmentId String? @unique
   notes           String?  @db.Text
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
@@ -896,8 +1178,10 @@ model FulfillmentItem {
   quantity      Int
 
   fulfillment   Fulfillment @relation(fields: [fulfillmentId], references: [id], onDelete: Cascade)
+  orderItem     OrderItem   @relation(fields: [orderItemId], references: [id], onDelete: Restrict)
 
   @@index([fulfillmentId])
+  @@index([orderItemId])
 }
 
 // ============================================
@@ -949,6 +1233,8 @@ model DailyAnalytics {
   addToCartCount      Int      @default(0)
   checkoutStarted     Int      @default(0)
   checkoutCompleted   Int      @default(0)
+  orders              Int      @default(0)
+  revenue             Decimal  @default(0) @db.Decimal(12, 2)
   conversionRate      Decimal  @default(0) @db.Decimal(5, 4)
   averageSessionTime  Int      @default(0) // in seconds
   bounceRate          Decimal  @default(0) @db.Decimal(5, 4)
@@ -1013,4 +1299,3 @@ model ProductDescriptionRevision {
   @@index([productId, createdAt])
   @@index([appliedToProduct])
 }
-
