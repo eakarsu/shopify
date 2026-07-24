@@ -3,6 +3,12 @@ import bcrypt from "bcryptjs"
 
 const prisma = new PrismaClient()
 
+function requireDemoPassword() {
+  const password = process.env.DEMO_PASSWORD || process.env.SEED_DEMO_PASSWORD || process.env.DEMO_SEED_PASSWORD || '';
+  if (password.length < 12 || password.length > 1024) throw new Error('DEMO_PASSWORD must contain 12-1024 characters');
+  return password;
+}
+
 function slugify(text: string): string {
   return text
     .toLowerCase()
@@ -429,7 +435,7 @@ async function main() {
   // ============================================
   console.log("Creating customers...")
   const customers = []
-  const customerPassword = await bcrypt.hash("Customer123!", 10)
+  const customerPassword = await bcrypt.hash(requireDemoPassword(), 10)
 
   for (let i = 0; i < 80; i++) {
     const firstName = randomElement(firstNames)
