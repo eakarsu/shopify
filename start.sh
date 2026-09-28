@@ -18,6 +18,16 @@ esac
 [ "$BACKEND_PORT" != "$FRONTEND_PORT" ]||{ echo "Assigned ports must differ" >&2;exit 1; }
 for assigned_port in "$BACKEND_PORT" "$FRONTEND_PORT";do [[ "$assigned_port" =~ ^[0-9]+$ ]]||exit 1;nc -z 127.0.0.1 "$assigned_port" >/dev/null 2>&1&&{ echo "Assigned port $assigned_port is occupied; no process was terminated" >&2;exit 1; };done
 [ -d "$PROJECT_DIR/node_modules" ]&&[ -d "$PROJECT_DIR/runtime" ]||{ echo "Runtime dependencies are missing" >&2;exit 1; }
+if [[ "${ALLOW_SCHEMA_MIGRATION:-false}" =~ ^(1|true)$ ]]; then
+  (cd "$PROJECT_DIR" && npm run db:migrate:deploy)
+fi
+if [[ "${ALLOW_DEMO_SEED:-false}" == "true" ]]; then
+  (cd "$PROJECT_DIR" && npm run db:seed)
+fi
+# This launcher is an explicitly local demo runtime; keep the literal login
+# helper available only for this process and let the route stay disabled by
+# default in other environments.
+export ENABLE_DEMO_CREDENTIAL_AUTOFILL=true
 export RUNTIME_PROJECT_NAME=shopify RUNTIME_AI_ENDPOINT=/api/ai/commerce-operations-review RUNTIME_AI_FEATURE=commerce-operations-review
 export RUNTIME_AI_SYSTEM_PROMPT='You are a governed commerce-operations assistant. Review product and inventory sources, order state, payment and refund evidence, fulfillment, customer privacy, provider idempotency, reconciliation, immutable audit history, and explicit human release gates.'
 node "$PROJECT_DIR/runtime/setup.mjs"

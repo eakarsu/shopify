@@ -45,6 +45,19 @@ export default function AdminLoginPage() {
     }
   }
 
+  const fillDemoCredentials = async () => {
+    setError("")
+    try {
+      const response = await fetch("/api/auth/demo-credentials", { cache: "no-store" })
+      const credentials = await response.json()
+      if (!response.ok) throw new Error(credentials.error || "Demo credentials are unavailable")
+      setEmail(credentials.email || "")
+      setPassword(credentials.password || "")
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Demo credentials are unavailable")
+    }
+  }
+
   return (
     <div className="min-h-screen flex items-center justify-center bg-gray-100">
       <Card className="w-full max-w-md">
@@ -88,6 +101,9 @@ export default function AdminLoginPage() {
                 required
               />
             </div>
+            <Button type="button" variant="outline" className="w-full" onClick={fillDemoCredentials}>
+              Auto Fill Demo Credentials
+            </Button>
             <Button type="submit" className="w-full" disabled={loading}>
               {loading ? (
                 <>
@@ -95,14 +111,10 @@ export default function AdminLoginPage() {
                   Signing in...
                 </>
               ) : (
-                "Sign in"
+                "Sign In"
               )}
             </Button>
           </form>
-          <div className="mt-6 text-center text-sm text-muted-foreground">
-            <p>Demo credentials:</p>
-            <p className="font-mono">admin@shopify.com / admin123</p>
-          </div>
         </CardContent>
       </Card>
     </div>
