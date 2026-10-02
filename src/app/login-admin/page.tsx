@@ -47,14 +47,34 @@ export default function AdminLoginPage() {
 
   const fillDemoCredentials = async () => {
     setError("")
+    setLoading(true)
     try {
       const response = await fetch("/api/auth/demo-credentials", { cache: "no-store" })
       const credentials = await response.json()
       if (!response.ok) throw new Error(credentials.error || "Demo credentials are unavailable")
-      setEmail(credentials.email || "")
-      setPassword(credentials.password || "")
+      const demoEmail = credentials.email || ""
+      const demoPassword = credentials.password || ""
+      if (!demoEmail || !demoPassword) throw new Error("Demo credentials are unavailable")
+      // Fill the fields, then sign in immediately with the freshly fetched values.
+      setEmail(demoEmail)
+      setPassword(demoPassword)
+      const result = await signIn("admin-login", {
+        email: demoEmail,
+        password: demoPassword,
+        redirect: false,
+        callbackUrl: "/dashboard",
+      })
+      console.log("Demo signIn result:", result)
+      if (result?.error) {
+        setError("Invalid email or password")
+      } else if (result?.ok) {
+        // Use hard navigation to ensure session is properly loaded
+        window.location.href = "/dashboard"
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Demo credentials are unavailable")
+    } finally {
+      setLoading(false)
     }
   }
 
@@ -101,8 +121,8 @@ export default function AdminLoginPage() {
                 required
               />
             </div>
-            <Button type="button" variant="outline" className="w-full" onClick={fillDemoCredentials}>
-              Auto Fill Demo Credentials
+            <Button type="button" variant="outline" className="w-full" onClick={fillDemoCredentials} disabled={loading}>
+              {loading ? "Signing in..." : "Auto Fill & Sign In (Demo)"}
             </Button>
             <Button type="submit" className="w-full" disabled={loading}>
               {loading ? (
